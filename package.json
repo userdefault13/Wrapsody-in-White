@@ -19,11 +19,11 @@
   "dependencies": {
     "@apollo/server": "^4.12.2",
     "@as-integrations/h3": "^1.2.1",
+    "@stripe/stripe-js": "^8.5.3",
     "ethers": "^6.0.0",
     "graphql": "^16.12.0",
     "graphql-ws": "^6.0.6",
-    "mongodb": "^7.0.0"
+    "mongodb": "^7.0.0",
+    "stripe": "^20.0.0"
   }
 }
-
-

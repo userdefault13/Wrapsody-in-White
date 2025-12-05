@@ -21,6 +21,12 @@
               Logout
             </button>
             <div class="flex gap-4">
+              <NuxtLink to="/admin/pricing" class="btn-secondary">
+                Price Manager
+              </NuxtLink>
+              <NuxtLink to="/admin/services" class="btn-secondary">
+                Manage Services
+              </NuxtLink>
               <button
                 @click="openAvailabilityModal"
                 class="btn-secondary"

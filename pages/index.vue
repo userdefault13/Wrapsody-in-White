@@ -1,33 +1,37 @@
 <template>
-  <div class="min-h-screen">
+  <div class="min-h-screen bg-white dark:bg-gray-900">
     <!-- Navigation -->
-    <nav class="fixed w-full top-0 z-50 bg-white/95 backdrop-blur-sm shadow-sm">
+    <nav class="fixed w-full top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
-            <h1 class="text-2xl font-bold text-primary-600">Wrapsody in White</h1>
+            <h1 class="text-2xl font-bold text-primary-600 dark:text-primary-400">Wrapsody in White</h1>
           </div>
-          <div class="hidden md:flex space-x-8">
-            <a href="#services" class="text-gray-700 hover:text-primary-600 transition">Services</a>
-            <a href="#pricing" class="text-gray-700 hover:text-primary-600 transition">Pricing</a>
-            <a href="#about" class="text-gray-700 hover:text-primary-600 transition">About</a>
-            <a href="#contact" class="text-gray-700 hover:text-primary-600 transition">Contact</a>
+          <div class="hidden md:flex items-center space-x-8">
+            <a href="#services" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</a>
+            <a href="#pricing" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Pricing</a>
+            <a href="#about" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">About</a>
+            <a href="#contact" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Contact</a>
+            <button @click="openLookupModal" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Look Up Order</button>
           </div>
-          <button @click="openBookingModal" class="btn-primary text-sm">Book Now</button>
+          <div class="flex items-center gap-4">
+            <DarkModeToggle />
+            <button @click="openBookingModal" class="btn-primary text-sm">Book Now</button>
+          </div>
         </div>
       </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary-50 to-white">
+    <section class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary-50 to-white dark:from-gray-800 dark:to-gray-900">
       <div class="max-w-7xl mx-auto">
         <div class="grid md:grid-cols-2 gap-12 items-center">
           <div>
-            <h2 class="text-5xl font-bold text-gray-900 mb-6 leading-tight">
+            <h2 class="text-5xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
               Beautiful Gift Wrapping,<br />
-              <span class="text-primary-600">Delivered to Your Door</span>
+              <span class="text-primary-600 dark:text-primary-400">Delivered to Your Door</span>
             </h2>
-            <p class="text-xl text-gray-600 mb-8">
+            <p class="text-xl text-gray-600 dark:text-gray-300 mb-8">
               Affordable, quick, and professional mobile gift wrapping services in Long Beach, CA. 
               Perfect for busy families and holiday shoppers.
             </p>
@@ -35,7 +39,7 @@
               <button @click="openBookingModal" class="btn-primary text-center">Get Started</button>
               <a href="#pricing" class="btn-secondary text-center">View Pricing</a>
             </div>
-            <div class="mt-8 flex items-center gap-6 text-sm text-gray-600">
+            <div class="mt-8 flex items-center gap-6 text-sm text-gray-600 dark:text-gray-300">
               <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
@@ -66,77 +70,70 @@
     </section>
 
     <!-- Services Section -->
-    <section id="services" class="section-padding bg-white">
+    <section id="services" class="section-padding bg-white dark:bg-gray-800">
       <div class="max-w-7xl mx-auto">
         <div class="text-center mb-12">
-          <h2 class="text-4xl font-bold text-gray-900 mb-4">Our Services</h2>
-          <p class="text-xl text-gray-600">Professional wrapping for every occasion</p>
+          <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Our Services</h2>
+          <p class="text-xl text-gray-600 dark:text-gray-300">Professional wrapping for every occasion</p>
         </div>
-        <div class="grid md:grid-cols-3 gap-8">
+        <div v-if="loadingServices" class="text-center py-12">
+          <p class="text-gray-500 dark:text-gray-400">Loading services...</p>
+        </div>
+        <div v-else-if="homepageServiceTypes.length === 0" class="text-center py-12">
+          <p class="text-gray-500 dark:text-gray-400">No services available at this time.</p>
+        </div>
+        <div v-else class="grid md:grid-cols-3 gap-8">
           <ServiceCard
-            title="Mobile Wrapping"
-            description="We come to you! Perfect for busy schedules. Same-day service available."
-            icon="🚗"
-          />
-          <ServiceCard
-            title="Pop-Up Service"
-            description="Find us at local malls and events. Quick, convenient wrapping on the go."
-            icon="📍"
-          />
-          <ServiceCard
-            title="Bulk Orders"
-            description="Special rates for businesses and large orders. 15% off for 10+ gifts."
-            icon="📦"
+            v-for="service in homepageServiceTypes"
+            :key="service.id"
+            :title="service.title"
+            :description="service.description || service.subtitle"
+            :icon="getServiceIcon(service.category)"
           />
         </div>
       </div>
     </section>
 
     <!-- Pricing Section -->
-    <section id="pricing" class="section-padding bg-gray-50">
+    <section id="pricing" class="section-padding bg-gray-50 dark:bg-gray-900">
       <div class="max-w-7xl mx-auto">
         <div class="text-center mb-12">
-          <h2 class="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h2>
-          <p class="text-xl text-gray-600">20-30% more affordable than premium services</p>
+          <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Simple, Transparent Pricing</h2>
+          <p class="text-xl text-gray-600 dark:text-gray-300">20-30% more affordable than premium services</p>
         </div>
-        <div class="grid md:grid-cols-3 gap-8">
+        <div v-if="loadingPricing" class="text-center py-12">
+          <p class="text-gray-500 dark:text-gray-400">Loading pricing...</p>
+        </div>
+        <div v-else-if="homepageServices.length === 0" class="text-center py-12">
+          <p class="text-gray-500 dark:text-gray-400">No pricing available at this time.</p>
+        </div>
+        <div v-else class="grid md:grid-cols-3 gap-8">
           <PricingCard
-            tier="Basic"
-            price="$8"
-            description="Small gifts (books, small boxes)"
-            features="Professional wrapping, basic ribbon"
-            :popular="false"
-            @book-now="openBookingModal"
-          />
-          <PricingCard
-            tier="Premium"
-            price="$12"
-            description="Medium gifts (standard boxes)"
-            features="Premium paper, decorative bows, custom tags"
-            :popular="true"
-            @book-now="openBookingModal"
-          />
-          <PricingCard
-            tier="Unlimited"
-            price="$50/hr"
-            description="Home visit service"
-            features="Wrap all your gifts, multiple styles, 1-hour minimum"
-            :popular="false"
+            v-for="(service, index) in homepageServices"
+            :key="service.id"
+            :tier="service.name"
+            :price="`$${service.price}${service.priceType === 'per-hour' ? '/hr' : ''}`"
+            :description="service.description"
+            :features="Array.isArray(service.features) ? service.features.join(', ') : ''"
+            :popular="index === 1"
             @book-now="openBookingModal"
           />
         </div>
         <div class="mt-8 text-center">
-          <p class="text-gray-600 mb-4">Delivery fee: $15 (waived for orders over $50)</p>
-          <p class="text-sm text-gray-500">Custom tags: +$2 | Eco-friendly options available</p>
+          <p class="text-gray-600 dark:text-gray-300 mb-4">Delivery fee: $15 (waived for orders over $50)</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Custom tags: +$2 | Eco-friendly options available</p>
+          <NuxtLink to="/services" class="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold">
+            View All Services →
+          </NuxtLink>
         </div>
       </div>
     </section>
 
     <!-- About Section -->
-    <section id="about" class="section-padding bg-white">
+    <section id="about" class="section-padding bg-white dark:bg-gray-800">
       <div class="max-w-4xl mx-auto">
         <div class="text-center mb-12">
-          <h2 class="text-4xl font-bold text-gray-900 mb-4">Why Choose Wrapsody in White?</h2>
+          <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Why Choose Wrapsody in White?</h2>
         </div>
         <div class="grid md:grid-cols-2 gap-8">
           <div class="space-y-6">
@@ -172,7 +169,7 @@
     </section>
 
     <!-- Contact/Booking Section -->
-    <section id="contact" class="section-padding bg-primary-600 text-white">
+    <section id="contact" class="section-padding bg-primary-600 dark:bg-primary-700 text-white">
       <div class="max-w-4xl mx-auto text-center">
         <h2 class="text-4xl font-bold mb-4">Ready to Get Started?</h2>
         <p class="text-xl text-primary-100 mb-8">Book your wrapping service today!</p>
@@ -197,7 +194,7 @@
     </section>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-gray-300 py-12 px-4 sm:px-6 lg:px-8">
+    <footer class="bg-gray-900 dark:bg-black text-gray-300 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-7xl mx-auto">
         <div class="grid md:grid-cols-3 gap-8 mb-8">
           <div>
@@ -233,11 +230,29 @@
       @close="closeBookingModal"
       @booking-created="handleBookingCreated"
     />
+
+    <!-- Payment Modal -->
+    <PaymentModal
+      v-if="pendingPayment"
+      :is-open="isPaymentModalOpen"
+      :booking="pendingPayment.booking"
+      :total="pendingPayment.total"
+      @close="closePaymentModal"
+      @payment-complete="handlePaymentComplete"
+    />
+
+    <!-- Lookup Order Modal -->
+    <LookupOrderModal
+      :is-open="isLookupModalOpen"
+      @close="closeLookupModal"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useGraphQL } from '~/composables/useGraphQL'
 
 // SEO
 useHead({
@@ -248,6 +263,93 @@ useHead({
 })
 
 const isBookingModalOpen = ref(false)
+const isLookupModalOpen = ref(false)
+const isPaymentModalOpen = ref(false)
+const pendingPayment = ref(null)
+const allPricing = ref([])
+const allServiceTypes = ref([])
+const loadingServices = ref(true)
+const loadingPricing = ref(true)
+
+// Get first 3 service types for homepage
+const homepageServiceTypes = computed(() => {
+  return allServiceTypes.value.slice(0, 3)
+})
+
+// Get first 3 pricing tiers for homepage
+const homepageServices = computed(() => {
+  return allPricing.value.slice(0, 3)
+})
+
+// Map category to icon
+const getServiceIcon = (category) => {
+  const iconMap = {
+    'dropoff': '📦',
+    'delivery': '🚗',
+    'onsite': '📍',
+    'popup': '📍',
+    'bulk': '📦',
+    'holiday': '🎄',
+    'eco': '🌱',
+    'luxury': '✨'
+  }
+  return iconMap[category] || '🎁'
+}
+
+const fetchServiceTypes = async () => {
+  try {
+    loadingServices.value = true
+    const { executeQuery } = useGraphQL()
+    const query = `
+      query {
+        services(active: true) {
+          id
+          title
+          subtitle
+          description
+          tag
+          category
+          active
+          order
+        }
+      }
+    `
+    const data = await executeQuery(query)
+    allServiceTypes.value = data.services.sort((a, b) => a.order - b.order)
+  } catch (error) {
+    console.error('Error fetching services:', error)
+  } finally {
+    loadingServices.value = false
+  }
+}
+
+const fetchPricing = async () => {
+  try {
+    loadingPricing.value = true
+    const { executeQuery } = useGraphQL()
+    const query = `
+      query {
+        pricing(active: true) {
+          id
+          name
+          description
+          price
+          priceType
+          features
+          group
+          active
+          order
+        }
+      }
+    `
+    const data = await executeQuery(query)
+    allPricing.value = data.pricing.sort((a, b) => a.order - b.order)
+  } catch (error) {
+    console.error('Error fetching pricing:', error)
+  } finally {
+    loadingPricing.value = false
+  }
+}
 
 const openBookingModal = () => {
   isBookingModalOpen.value = true
@@ -257,26 +359,71 @@ const closeBookingModal = () => {
   isBookingModalOpen.value = false
 }
 
+const openLookupModal = () => {
+  isLookupModalOpen.value = true
+}
+
+const closeLookupModal = () => {
+  isLookupModalOpen.value = false
+}
+
 const router = useRouter()
 
-const handleBookingCreated = (booking) => {
-  console.log('Booking created successfully:', booking)
-  console.log('Booking ID:', booking?.id)
+const handleBookingCreated = (data) => {
+  console.log('Booking created, opening payment modal:', data)
   
-  if (!booking || !booking.id) {
-    console.error('Booking object missing id:', booking)
+  if (!data || !data.booking || !data.booking.id) {
+    console.error('Invalid booking data:', data)
     return
   }
   
-  const confirmationUrl = `/confirmation/${booking.id}`
-  console.log('Navigating to:', confirmationUrl)
+  // Store booking and total for payment modal
+  pendingPayment.value = {
+    booking: data.booking,
+    total: data.total
+  }
   
-  // Close modal first
-  closeBookingModal()
-  
-  // Navigate immediately - use window.location for reliability
-  setTimeout(() => {
-    window.location.href = confirmationUrl
-  }, 100)
+  // Open payment modal
+  isPaymentModalOpen.value = true
 }
+
+const closePaymentModal = () => {
+  isPaymentModalOpen.value = false
+  pendingPayment.value = null
+}
+
+const handlePaymentComplete = async (paymentData) => {
+  console.log('Payment completed:', paymentData)
+  
+  // Get booking ID from payment data or pending payment
+  const bookingId = paymentData.bookingId || pendingPayment.value?.booking?.id
+  
+  if (!bookingId) {
+    console.error('No booking ID found for confirmation')
+    return
+  }
+  
+  // Close payment modal first
+  closePaymentModal()
+  
+  // Wait a moment for modal to close
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // Navigate to confirmation page
+  const confirmationUrl = `/confirmation/${bookingId}`
+  
+  // Use router for navigation
+  try {
+    await router.push(confirmationUrl)
+  } catch (err) {
+    console.error('Navigation error:', err)
+    // Fallback to window location
+    window.location.href = confirmationUrl
+  }
+}
+
+onMounted(() => {
+  fetchServiceTypes()
+  fetchPricing()
+})
 </script>

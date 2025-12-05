@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Drop Off Service",
+    "subtitle": "Bring Your Gifts to Us",
+    "description": "Drop off your gifts at our location and we'll wrap them professionally. Perfect for when you're in the area or prefer to handle delivery yourself. Quick turnaround times available.",
+    "tag": "Self-Service",
+    "category": "dropoff",
+    "active": true
+  },
+  {
+    "title": "Delivery Service",
+    "subtitle": "We Come to You",
+    "description": "Our mobile wrapping team comes directly to your location - home, office, or event. We bring all materials and expertise to wrap your gifts on-site. Same-day service available for your convenience.",
+    "tag": "Convenient",
+    "category": "delivery",
+    "active": true
+  },
+  {
+    "title": "On-Site Service",
+    "subtitle": "Wrap at Your Location",
+    "description": "Professional wrapping service at your location. Perfect for events, parties, corporate functions, or when you need multiple gifts wrapped. Our team sets up a wrapping station and handles everything on-site.",
+    "tag": "Event Ready",
+    "category": "onsite",
+    "active": true
+  }
+]

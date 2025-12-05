@@ -12,15 +12,15 @@
         <!-- Modal -->
         <div class="flex min-h-full items-center justify-center p-4">
           <div
-            class="relative bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             @click.stop
           >
             <!-- Header -->
-            <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl">
-              <h2 class="text-2xl font-bold text-gray-900">Book Your Wrapping Service</h2>
+            <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Book Your Wrapping Service</h2>
               <button
                 @click="closeModal"
-                class="text-gray-400 hover:text-gray-600 transition-colors"
+                class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -33,7 +33,7 @@
               <form @submit.prevent="handleSubmit" class="space-y-6">
                 <!-- Service Selection -->
                 <div>
-                  <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Service Type *
                   </label>
                   <div class="grid md:grid-cols-3 gap-4">
@@ -49,7 +49,7 @@
 
                 <!-- Date Selection -->
                 <div>
-                  <label for="date" class="block text-sm font-semibold text-gray-700 mb-2">
+                  <label for="date" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Select Date *
                   </label>
                   <input
@@ -59,19 +59,19 @@
                     :min="minDate"
                     required
                     @change="selectedTime = ''"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <p v-if="selectedDate && !isDateAvailable(selectedDate)" class="mt-2 text-sm text-red-600">
+                  <p v-if="selectedDate && !isDateAvailable(selectedDate)" class="mt-2 text-sm text-red-600 dark:text-red-400">
                     This date is fully booked. Please select another date.
                   </p>
                 </div>
 
                 <!-- Time Selection -->
                 <div v-if="selectedDate && isDateAvailable(selectedDate)">
-                  <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Select Time *
                   </label>
-                  <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 max-h-64 overflow-y-auto p-2">
+                  <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <button
                       v-for="slot in availableTimeSlots"
                       :key="slot"
@@ -80,21 +80,21 @@
                         'px-3 py-2 rounded-lg border-2 transition-all text-sm',
                         selectedTime === slot
                           ? 'bg-primary-600 text-white border-primary-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-primary-400'
+                          : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:border-primary-400'
                       ]"
                       @click="form.time = slot; selectedTime = slot"
                     >
                       {{ formatTime(slot) }}
                     </button>
                   </div>
-                  <p v-if="availableTimeSlots.length === 0" class="mt-2 text-sm text-gray-500">
+                  <p v-if="availableTimeSlots.length === 0" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     No available time slots for this date.
                   </p>
                 </div>
 
                 <!-- Number of Gifts -->
                 <div>
-                  <label for="gifts" class="block text-sm font-semibold text-gray-700 mb-2">
+                  <label for="gifts" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Number of Gifts *
                   </label>
                   <input
@@ -103,14 +103,14 @@
                     type="number"
                     min="1"
                     required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
 
                 <!-- Contact Information -->
                 <div class="grid md:grid-cols-2 gap-6">
                   <div>
-                    <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <label for="name" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Full Name *
                     </label>
                     <input
@@ -118,12 +118,12 @@
                       v-model="form.name"
                       type="text"
                       required
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="John Doe"
                     />
                   </div>
                   <div>
-                    <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <label for="email" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Email *
                     </label>
                     <input
@@ -131,7 +131,7 @@
                       v-model="form.email"
                       type="email"
                       required
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="john@example.com"
                     />
                   </div>
@@ -139,7 +139,7 @@
 
                 <div class="grid md:grid-cols-2 gap-6">
                   <div>
-                    <label for="phone" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <label for="phone" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Phone Number *
                     </label>
                     <input
@@ -147,12 +147,12 @@
                       v-model="form.phone"
                       type="tel"
                       required
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="(555) 123-4567"
                     />
                   </div>
                   <div>
-                    <label for="address" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <label for="address" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Service Address *
                     </label>
                     <input
@@ -160,7 +160,7 @@
                       v-model="form.address"
                       type="text"
                       required
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                       placeholder="123 Main St, Long Beach, CA"
                     />
                   </div>
@@ -168,40 +168,40 @@
 
                 <!-- Special Instructions -->
                 <div>
-                  <label for="message" class="block text-sm font-semibold text-gray-700 mb-2">
+                  <label for="message" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Special Instructions or Requests
                   </label>
                   <textarea
                     id="message"
                     v-model="form.message"
                     rows="4"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                     placeholder="Any specific wrapping preferences, themes, or special requests..."
                   ></textarea>
                 </div>
 
                 <!-- Price Summary -->
-                <div v-if="form.service" class="bg-gray-50 rounded-lg p-6">
-                  <h3 class="font-semibold text-gray-900 mb-4">Booking Summary</h3>
+                <div v-if="form.service" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                  <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Booking Summary</h3>
                   <div class="space-y-2 text-sm">
                     <div class="flex justify-between">
-                      <span class="text-gray-600">Service:</span>
-                      <span class="font-semibold">{{ getServiceName(form.service) }}</span>
+                      <span class="text-gray-600 dark:text-gray-300">Service:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">{{ getServiceName(form.service) }}</span>
                     </div>
                     <div class="flex justify-between">
-                      <span class="text-gray-600">Number of Gifts:</span>
-                      <span class="font-semibold">{{ form.numberOfGifts || 0 }}</span>
+                      <span class="text-gray-600 dark:text-gray-300">Number of Gifts:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">{{ form.numberOfGifts || 0 }}</span>
                     </div>
                     <div class="flex justify-between">
-                      <span class="text-gray-600">Date & Time:</span>
-                      <span class="font-semibold">
+                      <span class="text-gray-600 dark:text-gray-300">Date & Time:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">
                         {{ formatDate(selectedDate) }} {{ formatTime(selectedTime) }}
                       </span>
                     </div>
-                    <div class="border-t border-gray-300 pt-2 mt-2">
+                    <div class="border-t border-gray-300 dark:border-gray-600 pt-2 mt-2">
                       <div class="flex justify-between text-lg">
-                        <span class="font-bold text-gray-900">Total:</span>
-                        <span class="font-bold text-primary-600">${{ calculateTotal() }}</span>
+                        <span class="font-bold text-gray-900 dark:text-white">Total:</span>
+                        <span class="font-bold text-primary-600 dark:text-primary-400">${{ calculateTotal() }}</span>
                       </div>
                     </div>
                   </div>
@@ -237,11 +237,11 @@
 
             <!-- Loading Overlay with Progress Bar -->
             <Transition name="fade">
-              <div v-if="submitting" class="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10">
+              <div v-if="submitting" class="absolute inset-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10">
                 <div class="text-center px-8">
                   <!-- Spinner -->
                   <div class="mb-6">
-                    <svg class="animate-spin h-16 w-16 text-primary-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg class="animate-spin h-16 w-16 text-primary-600 dark:text-primary-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -249,17 +249,17 @@
                   
                   <!-- Progress Bar -->
                   <div class="w-64 mb-4 mx-auto">
-                    <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div 
-                        class="h-full bg-primary-600 rounded-full transition-all duration-300 ease-out"
+                        class="h-full bg-primary-600 dark:bg-primary-500 rounded-full transition-all duration-300 ease-out"
                         :style="{ width: progressPercent + '%' }"
                       ></div>
                     </div>
                   </div>
                   
                   <!-- Status Text -->
-                  <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ progressStatus }}</h3>
-                  <p class="text-gray-600 text-sm">{{ progressMessage }}</p>
+                  <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">{{ progressStatus }}</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-sm">{{ progressMessage }}</p>
                 </div>
               </div>
             </Transition>
@@ -271,8 +271,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useBookings } from '~/composables/useBookings'
+import { useGraphQL } from '~/composables/useGraphQL'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   isOpen: {
@@ -286,11 +288,49 @@ const emit = defineEmits(['close', 'booking-created'])
 const { createBooking, getAvailableTimeSlots, isDateAvailable } = useBookings()
 const router = useRouter()
 
-const services = [
-  { id: 'basic', name: 'Basic', price: 8, description: 'Small gifts' },
-  { id: 'premium', name: 'Premium', price: 12, description: 'Medium gifts' },
-  { id: 'unlimited', name: 'Unlimited', price: 50, description: 'Per hour' }
-]
+const services = ref([])
+
+// Fetch pricing from GraphQL
+const fetchServices = async () => {
+  try {
+    const { executeQuery } = useGraphQL()
+    const query = `
+      query {
+        pricing(active: true) {
+          id
+          name
+          description
+          price
+          priceType
+          features
+          serviceCategory
+        }
+      }
+    `
+    const data = await executeQuery(query)
+    console.log('Fetched pricing data:', data.pricing)
+    services.value = data.pricing.map(pricing => {
+      const service = {
+        id: pricing.id,
+        name: pricing.name,
+        price: pricing.price,
+        description: pricing.description || '',
+        priceType: pricing.priceType || 'per-item',
+        serviceCategory: pricing.serviceCategory || null
+      }
+      console.log('Mapped service:', service.name, 'serviceCategory:', service.serviceCategory)
+      return service
+    })
+  } catch (error) {
+    console.error('Error fetching pricing:', error)
+    // Fallback to default pricing
+    services.value = [
+      { id: 'basic', name: 'Basic', price: 8, description: 'Small gifts', priceType: 'per-item' },
+      { id: 'premium', name: 'Premium', price: 12, description: 'Medium gifts', priceType: 'per-item' },
+      { id: 'unlimited', name: 'Unlimited', price: 50, description: 'Per hour', priceType: 'per-hour' }
+    ]
+  }
+}
 
 const form = ref({
   service: '',
@@ -343,23 +383,28 @@ watch(selectedTime, (newTime) => {
 })
 
 const getServiceName = (serviceId) => {
-  const service = services.find(s => s.id === serviceId)
-  return service ? `${service.name} ($${service.price}${service.id === 'unlimited' ? '/hr' : ''})` : ''
+  const service = services.value.find(s => s.id === serviceId)
+  if (!service) return ''
+  const priceSuffix = service.priceType === 'per-hour' ? '/hr' : ''
+  return `${service.name} ($${service.price}${priceSuffix})`
 }
 
 const calculateTotal = () => {
   if (!form.value.service) return '0.00'
-  const service = services.find(s => s.id === form.value.service)
+  const service = services.value.find(s => s.id === form.value.service)
   if (!service) return '0.00'
   
   let total = 0
-  if (service.id === 'unlimited') {
+  if (service.priceType === 'per-hour') {
+    total = service.price
+  } else if (service.priceType === 'fixed') {
     total = service.price
   } else {
     total = service.price * form.value.numberOfGifts
   }
   
-  if (total < 50) {
+  // Only add delivery fee if serviceCategory is "delivery"
+  if (service.serviceCategory === 'delivery' && total < 50) {
     total += 15
   }
   
@@ -446,19 +491,20 @@ const handleSubmit = async () => {
     progressStatus.value = 'Success!'
     progressMessage.value = 'Your booking has been confirmed'
     
-    // Wait longer to show success state - give users time to see the confirmation
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Wait to show success state
+    await new Promise(resolve => setTimeout(resolve, 1500))
     
-    console.log('Booking created, emitting event:', booking)
-    console.log('Booking ID:', booking?.id)
+    // Calculate total for payment
+    const total = parseFloat(calculateTotal())
     
-    // Emit event with booking data - parent will handle navigation
-    emit('booking-created', booking)
+    // Emit event with booking data and total - parent will show payment modal
+    emit('booking-created', {
+      booking,
+      total
+    })
     
-    // Close modal - parent will navigate after modal closes
+    // Close booking modal - payment modal will open next
     closeModal()
-    
-    console.log('Modal closed, waiting for parent navigation')
   } catch (error) {
     console.error('Booking error:', error)
     progressStatus.value = 'Error'
@@ -479,6 +525,11 @@ watch(() => props.isOpen, (isOpen) => {
       // Lock body scroll
       document.body.style.overflow = 'hidden'
       
+      // Fetch services if not already loaded
+      if (services.value.length === 0) {
+        fetchServices()
+      }
+      
       const handleEscape = (e) => {
         if (e.key === 'Escape') {
           closeModal()
@@ -494,6 +545,10 @@ watch(() => props.isOpen, (isOpen) => {
       document.body.style.overflow = ''
     }
   }
+})
+
+onMounted(() => {
+  fetchServices()
 })
 </script>
 

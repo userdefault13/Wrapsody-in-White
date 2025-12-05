@@ -1,14 +1,14 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-primary-50 to-white pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen bg-gradient-to-br from-primary-50 to-white dark:from-gray-800 dark:to-gray-900 pt-24 pb-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-3xl mx-auto">
       <!-- Loading State -->
-      <div v-if="loading" class="bg-white rounded-xl shadow-lg p-12 text-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-        <p class="text-gray-600">Loading booking details...</p>
+      <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400 mx-auto mb-4"></div>
+        <p class="text-gray-600 dark:text-gray-300">Loading booking details...</p>
       </div>
 
       <!-- Success State -->
-      <div v-else-if="booking" class="bg-white rounded-xl shadow-2xl overflow-hidden">
+      <div v-else-if="booking" class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
         <!-- Success Header -->
         <div class="bg-gradient-to-r from-green-500 to-green-600 px-8 py-12 text-center">
           <div class="mx-auto w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-lg">
@@ -23,20 +23,20 @@
         <!-- Booking Details -->
         <div class="p-8">
           <div class="mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
               Booking Details
             </h2>
-            <div class="bg-gray-50 rounded-lg p-6 space-y-4">
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Booking ID</dt>
-                  <dd class="text-lg font-semibold text-gray-900 font-mono">{{ booking.id }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Booking ID</dt>
+                  <dd class="text-lg font-semibold text-gray-900 dark:text-white font-mono">{{ booking.id }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Status</dt>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Status</dt>
                   <dd>
                     <span :class="getStatusClass(booking.status)" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold">
                       {{ getStatusLabel(booking.status) }}
@@ -48,70 +48,70 @@
           </div>
 
           <div class="mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
               </svg>
               Customer Information
             </h2>
-            <div class="bg-gray-50 rounded-lg p-6 space-y-4">
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Name</dt>
-                  <dd class="text-lg font-semibold text-gray-900">{{ booking.name }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Name</dt>
+                  <dd class="text-lg font-semibold text-gray-900 dark:text-white">{{ booking.name }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Email</dt>
-                  <dd class="text-lg text-gray-900">{{ booking.email }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Email</dt>
+                  <dd class="text-lg text-gray-900 dark:text-white">{{ booking.email }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Phone</dt>
-                  <dd class="text-lg text-gray-900">{{ booking.phone }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Phone</dt>
+                  <dd class="text-lg text-gray-900 dark:text-white">{{ booking.phone }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Address</dt>
-                  <dd class="text-lg text-gray-900">{{ booking.address }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Address</dt>
+                  <dd class="text-lg text-gray-900 dark:text-white">{{ booking.address }}</dd>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
               </svg>
               Service Details
             </h2>
-            <div class="bg-gray-50 rounded-lg p-6 space-y-4">
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Service Type</dt>
-                  <dd class="text-lg font-semibold text-gray-900">{{ getServiceName(booking.service) }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Service Type</dt>
+                  <dd class="text-lg font-semibold text-gray-900 dark:text-white">{{ getServiceName(booking.service) }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Number of Gifts</dt>
-                  <dd class="text-lg text-gray-900">{{ booking.numberOfGifts }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Number of Gifts</dt>
+                  <dd class="text-lg text-gray-900 dark:text-white">{{ booking.numberOfGifts }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Date</dt>
-                  <dd class="text-lg font-semibold text-gray-900">{{ formatDate(booking.date) }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Date</dt>
+                  <dd class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatDate(booking.date) }}</dd>
                 </div>
                 <div>
-                  <dt class="text-sm font-medium text-gray-500 mb-1">Time</dt>
-                  <dd class="text-lg font-semibold text-gray-900">{{ formatTime(booking.time) }}</dd>
+                  <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Time</dt>
+                  <dd class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatTime(booking.time) }}</dd>
                 </div>
               </div>
-              <div v-if="booking.message" class="pt-4 border-t border-gray-200">
-                <dt class="text-sm font-medium text-gray-500 mb-1">Special Instructions</dt>
-                <dd class="text-gray-900">{{ booking.message }}</dd>
+              <div v-if="booking.message" class="pt-4 border-t border-gray-200 dark:border-gray-600">
+                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Special Instructions</dt>
+                <dd class="text-gray-900 dark:text-white">{{ booking.message }}</dd>
               </div>
             </div>
           </div>
 
           <!-- Next Steps -->
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-            <h3 class="text-lg font-semibold text-blue-900 mb-2 flex items-center gap-2">
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
@@ -159,14 +159,14 @@
       </div>
 
       <!-- Error State -->
-      <div v-else class="bg-white rounded-xl shadow-lg p-12 text-center">
-        <div class="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-          <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div v-else class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
+        <div class="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4">
+          <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900 mb-2">Booking Not Found</h2>
-        <p class="text-gray-600 mb-6">We couldn't find a booking with that ID. Please check your booking ID and try again.</p>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Booking Not Found</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-6">We couldn't find a booking with that ID. Please check your booking ID and try again.</p>
         <NuxtLink to="/" class="btn-primary inline-block">Back to Home</NuxtLink>
       </div>
     </div>

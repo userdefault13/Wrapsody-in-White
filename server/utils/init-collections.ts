@@ -101,6 +101,52 @@ export async function initializeCollections() {
       ]
     }
 
+    // ============================================
+    // PRICING COLLECTION (pricing tiers)
+    // ============================================
+    const pricingCollection = db.collection('pricing')
+    
+    // Create indexes for pricing
+    await pricingCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await pricingCollection.createIndex({ order: 1 }) // For ordering pricing tiers
+    await pricingCollection.createIndex({ active: 1 })
+    await pricingCollection.createIndex({ group: 1 })
+    await pricingCollection.createIndex({ serviceCategory: 1 }) // For linking to service types
+    await pricingCollection.createIndex({ createdAt: -1 })
+    
+    results.pricing = {
+      indexes: [
+        'id (unique)',
+        'order',
+        'active',
+        'group',
+        'serviceCategory',
+        'createdAt (descending)'
+      ]
+    }
+
+    // ============================================
+    // SERVICES COLLECTION (service types)
+    // ============================================
+    const servicesCollection = db.collection('services')
+    
+    // Create indexes for services
+    await servicesCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await servicesCollection.createIndex({ order: 1 }) // For ordering services
+    await servicesCollection.createIndex({ active: 1 })
+    await servicesCollection.createIndex({ category: 1 })
+    await servicesCollection.createIndex({ createdAt: -1 })
+    
+    results.services = {
+      indexes: [
+        'id (unique)',
+        'order',
+        'active',
+        'category',
+        'createdAt (descending)'
+      ]
+    }
+
     console.log('✅ Collections initialized successfully!')
     return {
       success: true,
@@ -125,7 +171,7 @@ export async function getCollectionStats() {
   const stats: Record<string, any> = {}
 
   try {
-    const collections = ['bookings', 'availability', 'transactions', 'users']
+    const collections = ['bookings', 'availability', 'transactions', 'users', 'pricing', 'services']
     
     for (const collectionName of collections) {
       const collection = db.collection(collectionName)

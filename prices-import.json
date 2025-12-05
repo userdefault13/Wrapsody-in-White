@@ -1,0 +1,129 @@
+[
+  {
+    "name": "Small",
+    "description": "Perfect for jewelry boxes, candles, books, mugs, and headphones. Quick and elegant wrapping.",
+    "price": 8,
+    "priceType": "per-item",
+    "features": [
+      "Double ribbon & luxury bow",
+      "Handwritten calligraphy tag",
+      "Scented tissue + wax seal (+$4)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "dropoff",
+    "active": true
+  },
+  {
+    "name": "Medium",
+    "description": "Ideal for shirt boxes, board games, blenders, and purses. Enhanced presentation with premium touches.",
+    "price": 12,
+    "priceType": "per-item",
+    "features": [
+      "Fabric ribbon upgrade (satin or velvet)",
+      "Themed sticker set (e.g., Star Wars, Barbie)",
+      "Hidden \"gift within gift\" (candy or ornament inside) (+$6)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "dropoff",
+    "active": true
+  },
+  {
+    "name": "Large / Odd",
+    "description": "For guitars, blankets, toy kitchens, boots, and other large or unusually shaped items.",
+    "price": 22,
+    "priceType": "per-item",
+    "features": [
+      "Reversible paper (two patterns in one wrap)",
+      "Built-in gift card pocket",
+      "Eco kraft + dried flowers/evergreen sprig (+$8)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "dropoff",
+    "active": true
+  },
+  {
+    "name": "Extra-Large / Fragile",
+    "description": "For bicycles, mirrors, artwork, and multiple items together. Includes special handling for fragile items.",
+    "price": 35,
+    "priceType": "per-item",
+    "features": [
+      "Reinforced double-boxing for shipping safety",
+      "Custom monogram vinyl sticker",
+      "LED fairy lights woven into bow (+$12)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "dropoff",
+    "active": true
+  },
+  {
+    "name": "Small",
+    "description": "Perfect for jewelry boxes, candles, books, mugs, and headphones. Quick and elegant wrapping.",
+    "price": 9,
+    "priceType": "per-item",
+    "features": [
+      "Double ribbon & luxury bow",
+      "Handwritten calligraphy tag",
+      "Scented tissue + wax seal (+$4)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "delivery",
+    "active": true
+  },
+  {
+    "name": "Medium",
+    "description": "Ideal for shirt boxes, board games, blenders, and purses. Enhanced presentation with premium touches.",
+    "price": 14,
+    "priceType": "per-item",
+    "features": [
+      "Fabric ribbon upgrade (satin or velvet)",
+      "Themed sticker set (e.g., Star Wars, Barbie)",
+      "Hidden \"gift within gift\" (candy or ornament inside) (+$6)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "delivery",
+    "active": true
+  },
+  {
+    "name": "Large / Odd",
+    "description": "For guitars, blankets, toy kitchens, boots, and other large or unusually shaped items.",
+    "price": 24,
+    "priceType": "per-item",
+    "features": [
+      "Reversible paper (two patterns in one wrap)",
+      "Built-in gift card pocket",
+      "Eco kraft + dried flowers/evergreen sprig (+$8)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "delivery",
+    "active": true
+  },
+  {
+    "name": "Extra-Large / Fragile",
+    "description": "For bicycles, mirrors, artwork, and multiple items together. Includes special handling for fragile items.",
+    "price": 38,
+    "priceType": "per-item",
+    "features": [
+      "Reinforced double-boxing for shipping safety",
+      "Custom monogram vinyl sticker",
+      "LED fairy lights woven into bow (+$12)"
+    ],
+    "group": "pricing",
+    "serviceCategory": "delivery",
+    "active": true
+  },
+  {
+    "name": "Hourly Rate",
+    "description": "Perfect for wrapping multiple gifts or bulk orders. Pay by the hour for maximum flexibility.",
+    "price": 75,
+    "priceType": "per-hour",
+    "features": [
+      "Wrap all your gifts in one session",
+      "Multiple styles and themes",
+      "1-hour minimum",
+      "Best value for 5+ gifts"
+    ],
+    "group": "pricing",
+    "serviceCategory": "onsite",
+    "active": true
+  }
+]

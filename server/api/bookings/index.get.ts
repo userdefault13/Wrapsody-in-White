@@ -3,7 +3,24 @@ import { getDatabase } from '~/server/utils/mongodb'
 export default defineEventHandler(async (event) => {
   try {
     const db = await getDatabase()
-    const bookings = await db.collection('bookings').find({}).sort({ createdAt: -1 }).toArray()
+    const query = getQuery(event)
+    
+    // Build query filter
+    const filter: any = {}
+    
+    if (query.email) {
+      filter.email = query.email
+    }
+    
+    if (query.status) {
+      filter.status = query.status
+    }
+    
+    if (query.date) {
+      filter.date = query.date
+    }
+    
+    const bookings = await db.collection('bookings').find(filter).sort({ createdAt: -1 }).toArray()
     
     return {
       success: true,

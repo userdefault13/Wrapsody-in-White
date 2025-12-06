@@ -11,6 +11,10 @@ export const typeDefs = `#graphql
     numberOfGifts: Int!
     message: String
     status: BookingStatus!
+    items: [BookingItem!]!
+    checkedInAt: String
+    checkedInBy: String
+    currentStage: WorkflowStage
     createdAt: String!
     updatedAt: String!
   }
@@ -21,6 +25,59 @@ export const typeDefs = `#graphql
     ready
     completed
     cancelled
+  }
+
+  enum WorkflowStage {
+    awaiting_checkin
+    checked_in
+    in_progress
+    quality_check
+    ready_for_pickup
+    completed
+  }
+
+  type MaterialUsed {
+    inventoryId: ID!
+    inventoryName: String!
+    quantity: Float!
+    unit: String
+  }
+
+  type BookingItem {
+    id: ID!
+    bookingId: ID!
+    itemNumber: Int!
+    description: String
+    size: String
+    photos: [String!]!
+    serialNumber: String
+    serialNumberPhoto: String
+    specialInstructions: String
+    wrappingStyle: String
+    materialsUsed: [MaterialUsed!]!
+    status: ItemStatus!
+    assignedWorker: String
+    checkedInAt: String
+    wrappingStartedAt: String
+    wrappingCompletedAt: String
+    wrappingProgress: [Boolean!]!
+    qualityCheckedAt: String
+    readyAt: String
+    pickedUpAt: String
+    isExpensiveElectronics: Boolean!
+    isLargerThanPaidSize: Boolean!
+    isSmallerThanPaidSize: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  enum ItemStatus {
+    pending_checkin
+    checked_in
+    wrapping
+    quality_check
+    ready
+    picked_up
   }
 
   type DayAvailability {
@@ -41,6 +98,10 @@ export const typeDefs = `#graphql
     updatedAt: String!
   }
 
+  type ScopeOfWork {
+    duration: Int!
+  }
+
   type Pricing {
     id: ID!
     name: String!
@@ -52,6 +113,7 @@ export const typeDefs = `#graphql
     serviceCategory: String
     active: Boolean!
     order: Int!
+    scopeOfWork: ScopeOfWork
     createdAt: String!
     updatedAt: String!
   }
@@ -145,6 +207,7 @@ export const typeDefs = `#graphql
     availability: Availability!
     availableTimeSlots(date: String!): [String!]!
     isDateAvailable(date: String!): Boolean!
+    maxGiftsForTimeSlot(date: String!, time: String!, service: String!): Int!
     pricing(active: Boolean, group: String, serviceCategory: String): [Pricing!]!
     pricingItem(id: ID!): Pricing
     services(active: Boolean, category: String): [Service!]!
@@ -156,7 +219,9 @@ export const typeDefs = `#graphql
     users(email: String, walletAddress: String, role: String): [User!]!
     user(id: ID!, email: String, walletAddress: String): User
     workers(workerType: WorkerType): [Worker!]!
-    worker(id: ID!, walletAddress: String): Worker
+    worker(id: ID, walletAddress: String): Worker
+    bookingItems(bookingId: ID!): [BookingItem!]!
+    terminalBookings(stage: WorkflowStage): [Booking!]!
   }
 
   input CreateBookingInput {
@@ -193,6 +258,10 @@ export const typeDefs = `#graphql
     isBlocked: Boolean!
   }
 
+  input ScopeOfWorkInput {
+    duration: Int!
+  }
+
   input CreatePricingInput {
     name: String!
     description: String
@@ -203,6 +272,7 @@ export const typeDefs = `#graphql
     serviceCategory: String
     active: Boolean
     order: Int
+    scopeOfWork: ScopeOfWorkInput
   }
 
   input UpdatePricingInput {
@@ -216,6 +286,7 @@ export const typeDefs = `#graphql
     serviceCategory: String
     active: Boolean
     order: Int
+    scopeOfWork: ScopeOfWorkInput
   }
 
   input ReorderPricingInput {
@@ -345,6 +416,61 @@ export const typeDefs = `#graphql
     notes: String
   }
 
+  input MaterialUsedInput {
+    inventoryId: ID!
+    inventoryName: String!
+    quantity: Float!
+    unit: String
+  }
+
+  input AddBookingItemInput {
+    bookingId: ID!
+    itemNumber: Int!
+    description: String
+    size: String
+    photos: [String!]
+    serialNumber: String
+    serialNumberPhoto: String
+    specialInstructions: String
+    wrappingStyle: String
+    isExpensiveElectronics: Boolean
+    isLargerThanPaidSize: Boolean
+    isSmallerThanPaidSize: Boolean
+  }
+
+  input UpdateBookingItemInput {
+    id: ID!
+    description: String
+    size: String
+    photos: [String!]
+    serialNumber: String
+    serialNumberPhoto: String
+    specialInstructions: String
+    wrappingStyle: String
+    status: ItemStatus
+    assignedWorker: String
+    materialsUsed: [MaterialUsedInput!]
+    wrappingProgress: [Boolean!]
+    isExpensiveElectronics: Boolean
+    isLargerThanPaidSize: Boolean
+    isSmallerThanPaidSize: Boolean
+  }
+
+  input CheckInBookingInput {
+    bookingId: ID!
+    checkedInBy: String!
+  }
+
+  input AssignWorkerInput {
+    itemId: ID!
+    workerId: String!
+  }
+
+  input RecordMaterialsInput {
+    itemId: ID!
+    materialsUsed: [MaterialUsedInput!]!
+  }
+
   type Mutation {
     createBooking(input: CreateBookingInput!): Booking!
     updateBookingStatus(input: UpdateBookingStatusInput!): Booking!
@@ -366,6 +492,11 @@ export const typeDefs = `#graphql
     createWorker(input: CreateWorkerInput!): Worker!
     updateWorker(input: UpdateWorkerInput!): Worker!
     addWorkerPackage(input: AddWorkerPackageInput!): Worker!
+    checkInBooking(input: CheckInBookingInput!): Booking!
+    addBookingItem(input: AddBookingItemInput!): BookingItem!
+    updateBookingItem(input: UpdateBookingItemInput!): BookingItem!
+    assignWorker(input: AssignWorkerInput!): BookingItem!
+    recordMaterialsUsed(input: RecordMaterialsInput!): BookingItem!
   }
 `
 

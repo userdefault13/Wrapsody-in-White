@@ -92,6 +92,14 @@
                 Availability Manager
               </span>
             </button>
+            <NuxtLink to="/admin/terminal" class="relative group btn-secondary flex items-center justify-center w-10 h-10 p-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 dark:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                Terminal
+              </span>
+            </NuxtLink>
             <NuxtLink to="/" class="relative group btn-secondary flex items-center justify-center w-10 h-10 p-0">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -766,6 +774,39 @@ const rejectRefund = async (refund) => {
   // For now, just remove from pending list by updating booking status
   // In a real system, you might want to track rejected refunds
   alert('Refund request rejected')
+}
+
+const confirmBooking = async (booking) => {
+  if (!confirm(`Confirm booking for ${booking.name} on ${formatDate(booking.date)} at ${formatTime(booking.time)}?`)) {
+    return
+  }
+  
+  processingAction.value = booking.id
+  try {
+    const mutation = `
+      mutation UpdateBookingStatus($input: UpdateBookingStatusInput!) {
+        updateBookingStatus(input: $input) {
+          id
+          status
+        }
+      }
+    `
+    await executeQuery(mutation, {
+      input: {
+        id: booking.id,
+        status: 'in_progress'
+      }
+    })
+    
+    // Refresh data
+    await fetchData()
+    alert('Booking confirmed successfully')
+  } catch (error) {
+    console.error('Error confirming booking:', error)
+    alert('Failed to confirm booking. Please try again.')
+  } finally {
+    processingAction.value = null
+  }
 }
 
 const viewBooking = (booking) => {

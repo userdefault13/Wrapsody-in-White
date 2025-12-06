@@ -113,10 +113,14 @@
                     id="gifts"
                     v-model.number="form.numberOfGifts"
                     type="number"
-                    min="1"
+                    :min="1"
+                    :max="maxGifts"
                     required
                     class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
+                  <p v-if="maxGiftsReached" class="mt-2 text-sm text-amber-600 dark:text-amber-400 font-medium">
+                    Sorry, that's the max for the day at this time slot.
+                  </p>
                 </div>
 
                 <!-- Contact Information -->
@@ -374,6 +378,10 @@ const checkingAvailability = ref(false)
 const availableTimeSlots = ref([])
 const loadingSlots = ref(false)
 
+const maxGifts = ref(null)
+const maxGiftsReached = ref(false)
+const checkingMaxGifts = ref(false)
+
 // Watch selectedDate and fetch time slots
 watch(selectedDate, async (newDate) => {
   if (newDate && dateAvailable.value) {
@@ -389,7 +397,66 @@ watch(selectedDate, async (newDate) => {
   } else {
     availableTimeSlots.value = []
   }
+  // Reset max gifts when date changes
+  maxGifts.value = null
+  maxGiftsReached.value = false
 }, { immediate: false })
+
+// Watch for time and service selection to calculate max gifts
+watch([selectedTime, () => form.value.service], async ([newTime, newServiceId]) => {
+  if (newTime && newServiceId && selectedDate.value) {
+    // Get service name from service ID
+    const service = services.value.find(s => s.id === newServiceId)
+    if (!service) {
+      maxGifts.value = null
+      maxGiftsReached.value = false
+      return
+    }
+    
+    checkingMaxGifts.value = true
+    try {
+      const { executeQuery } = useGraphQL()
+      const query = `
+        query {
+          maxGiftsForTimeSlot(date: "${selectedDate.value}", time: "${newTime}", service: "${service.name}")
+        }
+      `
+      const data = await executeQuery(query)
+      maxGifts.value = data.maxGiftsForTimeSlot || null
+      
+      // If current quantity exceeds max, cap it
+      if (maxGifts.value && form.value.numberOfGifts > maxGifts.value) {
+        form.value.numberOfGifts = maxGifts.value
+        maxGiftsReached.value = true
+      } else if (maxGifts.value && form.value.numberOfGifts === maxGifts.value) {
+        maxGiftsReached.value = true
+      } else {
+        maxGiftsReached.value = false
+      }
+    } catch (error) {
+      console.error('Error fetching max gifts:', error)
+      maxGifts.value = null
+      maxGiftsReached.value = false
+    } finally {
+      checkingMaxGifts.value = false
+    }
+  } else {
+    maxGifts.value = null
+    maxGiftsReached.value = false
+  }
+})
+
+// Watch numberOfGifts to check if it exceeds max
+watch(() => form.value.numberOfGifts, (newQuantity) => {
+  if (maxGifts.value && newQuantity > maxGifts.value) {
+    form.value.numberOfGifts = maxGifts.value
+    maxGiftsReached.value = true
+  } else if (maxGifts.value && newQuantity === maxGifts.value) {
+    maxGiftsReached.value = true
+  } else {
+    maxGiftsReached.value = false
+  }
+})
 
 const canSubmit = computed(() => {
   return form.value.service &&
@@ -496,6 +563,8 @@ const closeModal = () => {
   }
   selectedDate.value = ''
   selectedTime.value = ''
+  maxGifts.value = null
+  maxGiftsReached.value = false
   // Restore body scroll
   if (typeof window !== 'undefined') {
     document.body.style.overflow = ''

@@ -203,6 +203,34 @@ export async function initializeCollections() {
     // Update transactions collection to add userId index
     await transactionsCollection.createIndex({ userId: 1 })
 
+    // ============================================
+    // BOOKING ITEMS COLLECTION
+    // ============================================
+    const bookingItemsCollection = db.collection('bookingItems')
+    
+    // Create indexes for booking items
+    await bookingItemsCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await bookingItemsCollection.createIndex({ bookingId: 1 })
+    await bookingItemsCollection.createIndex({ status: 1 })
+    await bookingItemsCollection.createIndex({ assignedWorker: 1 })
+    await bookingItemsCollection.createIndex({ createdAt: -1 })
+    await bookingItemsCollection.createIndex({ bookingId: 1, itemNumber: 1 }) // Compound index
+    
+    results.bookingItems = {
+      indexes: [
+        'id (unique)',
+        'bookingId',
+        'status',
+        'assignedWorker',
+        'createdAt (descending)',
+        'bookingId + itemNumber (compound)'
+      ]
+    }
+
+    // Update bookings collection to add new fields
+    await bookingsCollection.createIndex({ currentStage: 1 })
+    await bookingsCollection.createIndex({ checkedInAt: -1 })
+
     console.log('✅ Collections initialized successfully!')
     return {
       success: true,

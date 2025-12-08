@@ -35,10 +35,10 @@
         </p>
       </div>
       <span
-        v-if="item.size"
+        v-if="itemSizeDisplay"
         class="px-2 py-1 text-xs font-medium rounded bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300"
       >
-        {{ item.size }}
+        {{ itemSizeDisplay }}
       </span>
     </div>
 
@@ -136,6 +136,27 @@ const workerName = computed(() => {
   const worker = props.workers[props.item.assignedWorker]
   if (!worker) return null
   return worker.name || worker.walletAddress?.substring(0, 6) + '...' || 'Worker'
+})
+
+const itemSizeDisplay = computed(() => {
+  if (!props.item) return null
+  
+  // Check if size object exists (from GraphQL resolver)
+  if (props.item.size && typeof props.item.size === 'object') {
+    return props.item.size.displayName || props.item.size.name || null
+  }
+  
+  // If sizeId exists but size object wasn't loaded, show sizeId
+  if (props.item.sizeId) {
+    return `Size ID: ${props.item.sizeId}`
+  }
+  
+  // Fallback to any size string that might exist
+  if (props.item.size && typeof props.item.size === 'string') {
+    return props.item.size
+  }
+  
+  return null
 })
 
 const handleStatusUpdate = () => {

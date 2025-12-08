@@ -998,7 +998,31 @@ export const resolvers = {
         const query: any = {}
         if (args.active !== undefined) query.active = args.active
         
-        const sizes = await db.collection('sizes')
+        // Check if sizes collection exists and has data, if not, seed default sizes
+        const sizesCollection = db.collection('sizes')
+        const existingSizes = await sizesCollection.countDocuments()
+        
+        if (existingSizes === 0) {
+          console.log('📦 Sizes collection is empty, seeding default sizes...')
+          const defaultSizes = [
+            { id: 'size-xsmall', name: 'xsmall', displayName: 'Extra Small', order: 1, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-small', name: 'small', displayName: 'Small', order: 2, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-medium', name: 'medium', displayName: 'Medium', order: 3, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-large', name: 'large', displayName: 'Large', order: 4, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-xl', name: 'xl', displayName: 'Extra Large', order: 5, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          ]
+          
+          // Ensure indexes exist
+          await sizesCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+          await sizesCollection.createIndex({ name: 1 }, { unique: true })
+          await sizesCollection.createIndex({ order: 1 })
+          await sizesCollection.createIndex({ active: 1 })
+          
+          await sizesCollection.insertMany(defaultSizes)
+          console.log('✅ Seeded default sizes in sizes query resolver')
+        }
+        
+        const sizes = await sizesCollection
           .find(query)
           .sort({ order: 1 })
           .toArray()
@@ -1013,11 +1037,35 @@ export const resolvers = {
     size: async (_: any, args: { id?: string; name?: string }) => {
       try {
         const db = await getDatabase()
+        const sizesCollection = db.collection('sizes')
+        
+        // Ensure sizes collection is initialized
+        const existingSizes = await sizesCollection.countDocuments()
+        if (existingSizes === 0) {
+          console.log('📦 Sizes collection is empty, seeding default sizes...')
+          const defaultSizes = [
+            { id: 'size-xsmall', name: 'xsmall', displayName: 'Extra Small', order: 1, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-small', name: 'small', displayName: 'Small', order: 2, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-medium', name: 'medium', displayName: 'Medium', order: 3, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-large', name: 'large', displayName: 'Large', order: 4, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: 'size-xl', name: 'xl', displayName: 'Extra Large', order: 5, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          ]
+          
+          // Ensure indexes exist
+          await sizesCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+          await sizesCollection.createIndex({ name: 1 }, { unique: true })
+          await sizesCollection.createIndex({ order: 1 })
+          await sizesCollection.createIndex({ active: 1 })
+          
+          await sizesCollection.insertMany(defaultSizes)
+          console.log('✅ Seeded default sizes in size query resolver')
+        }
+        
         const query: any = {}
         if (args.id) query.id = args.id
         if (args.name) query.name = args.name
         
-        const size = await db.collection('sizes').findOne(query)
+        const size = await sizesCollection.findOne(query)
         return size
       } catch (error: any) {
         console.error('Error fetching size:', error)

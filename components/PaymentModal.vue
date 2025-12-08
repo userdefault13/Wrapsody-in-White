@@ -344,20 +344,20 @@ const fetchBookingPricing = async () => {
     
     // First try to fetch by ID (new format)
     try {
-      const query = `
-        query {
+    const query = `
+      query {
           pricingItem(id: "${currentBooking.value.service}") {
-            id
-            name
-            price
-            priceType
-            serviceCategory
-          }
+          id
+          name
+          price
+          priceType
+          serviceCategory
         }
-      `
-      const data = await executeQuery(query)
+      }
+    `
+    const data = await executeQuery(query)
       if (data.pricingItem) {
-        bookingPricing.value = data.pricingItem
+    bookingPricing.value = data.pricingItem
         return
       }
     } catch (idError) {
@@ -979,7 +979,7 @@ const handlePayment = async () => {
       } else {
         throw new Error('No booking data available to create booking')
       }
-
+      
       // Record transaction in database
       console.log('Creating USDC transaction:', {
         bookingId: createdBooking.id,

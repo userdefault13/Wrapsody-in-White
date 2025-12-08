@@ -5,9 +5,31 @@
   >
     <div class="flex items-start justify-between mb-2">
       <div class="flex-1">
-        <h4 class="font-semibold text-gray-900 dark:text-white text-sm transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400">
-          {{ item.description || `Item ${item.itemNumber}` }}
-        </h4>
+        <div class="flex items-center gap-2">
+          <h4 class="font-semibold text-gray-900 dark:text-white text-sm transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400">
+            {{ item.description || `Item ${item.itemNumber}` }}
+          </h4>
+          <!-- Wrapping Progress Shield (Yellow - In Progress color) -->
+          <div
+            v-if="isWrapping100Percent"
+            class="flex items-center justify-center w-5 h-5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300"
+            title="Wrapping 100% Complete"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <!-- QA Progress Shield (Purple - QA color) -->
+          <div
+            v-if="isQA100Percent"
+            class="flex items-center justify-center w-5 h-5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+            title="Quality Check 100% Complete"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+        </div>
         <p v-if="booking" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
           {{ booking.name }}
         </p>
@@ -87,6 +109,26 @@ const emit = defineEmits(['update-status', 'view-details'])
 const hasWorkerStarted = computed(() => {
   // Show badge if worker is assigned, wrapping has started, or progress exists
   return !!(props.item.assignedWorker || props.item.wrappingStartedAt || (props.item.wrappingProgress && props.item.wrappingProgress.some(Boolean)))
+})
+
+const isWrapping100Percent = computed(() => {
+  if (!props.item.wrappingProgress || !Array.isArray(props.item.wrappingProgress)) {
+    return false
+  }
+  const totalSteps = props.item.wrappingProgress.length
+  if (totalSteps === 0) return false
+  const completedSteps = props.item.wrappingProgress.filter(Boolean).length
+  return completedSteps === totalSteps
+})
+
+const isQA100Percent = computed(() => {
+  if (!props.item.qualityCheckProgress || !Array.isArray(props.item.qualityCheckProgress)) {
+    return false
+  }
+  const totalSteps = props.item.qualityCheckProgress.length
+  if (totalSteps === 0) return false
+  const completedSteps = props.item.qualityCheckProgress.filter(Boolean).length
+  return completedSteps === totalSteps
 })
 
 const workerName = computed(() => {

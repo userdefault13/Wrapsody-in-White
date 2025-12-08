@@ -693,17 +693,72 @@ const handleCheckIn = async () => {
         }
       `
       
-      // Map size string to sizeId (temporary - should load sizes from GraphQL)
+      // Map size string to sizeId by fetching actual sizes from GraphQL
       let sizeId = null
       if (item.size) {
-        const sizeMap = {
-          'XSmall': 'size-xsmall',
-          'Small': 'size-small',
-          'Medium': 'size-medium',
-          'Large': 'size-large',
-          'XLarge': 'size-xl'
+        try {
+          // Fetch sizes to get the correct ID
+          const sizesQuery = `
+            query {
+              sizes(active: true) {
+                id
+                name
+                displayName
+              }
+            }
+          `
+          const sizesData = await executeQuery(sizesQuery)
+          const sizes = sizesData.sizes || []
+          
+          // Map size string to sizeId
+          // Try to match by displayName first, then by name
+          const sizeMap = {
+            'XSmall': ['xsmall', 'x-small', 'extra-small'],
+            'Small': ['small'],
+            'Medium': ['medium'],
+            'Large': ['large'],
+            'XLarge': ['xl', 'x-large', 'extra-large']
+          }
+          
+          const sizeKey = Object.keys(sizeMap).find(key => 
+            item.size.toLowerCase().includes(key.toLowerCase())
+          )
+          
+          if (sizeKey) {
+            const matchingSizeNames = sizeMap[sizeKey]
+            const matchingSize = sizes.find(s => 
+              matchingSizeNames.some(name => 
+                s.name.toLowerCase() === name.toLowerCase() || 
+                s.displayName.toLowerCase().includes(name.toLowerCase())
+              )
+            )
+            if (matchingSize) {
+              sizeId = matchingSize.id
+            }
+          }
+          
+          // Fallback: try direct match on displayName or name
+          if (!sizeId) {
+            const directMatch = sizes.find(s => 
+              s.displayName.toLowerCase() === item.size.toLowerCase() ||
+              s.name.toLowerCase() === item.size.toLowerCase()
+            )
+            if (directMatch) {
+              sizeId = directMatch.id
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching sizes for sizeId mapping:', error)
+          // Fallback to hardcoded mapping if GraphQL fails
+          const sizeMap = {
+            'XSmall': 'size-xsmall',
+            'Small': 'size-small',
+            'Medium': 'size-medium',
+            'Large': 'size-large',
+            'XLarge': 'size-xl'
+          }
+          sizeId = sizeMap[item.size] || null
         }
-        sizeId = sizeMap[item.size] || null
       }
       
       await executeQuery(addItemMutation, {

@@ -202,10 +202,77 @@ const calculateOrderStatus = (booking) => {
     return null // Don't show picked up or delivered orders
   }
   
-  // Priority 2: Check if any item is in quality check
-  const hasQualityCheck = checkedInItems.some(item => item.status === 'quality_check')
-  if (hasQualityCheck) {
+  // Priority 2: Check if ALL items are in quality check (not just any)
+  const itemsInQualityCheck = checkedInItems.filter(item => item.status === 'quality_check')
+  const allItemsInQualityCheck = checkedInItems.length > 0 && 
+                                  itemsInQualityCheck.length === checkedInItems.length &&
+                                  checkedInItems.every(item => item.status === 'quality_check')
+  
+  // LOGGING: Debug why booking is in QA
+  if (itemsInQualityCheck.length > 0) {
+    console.log('🔍 [QA DEBUG] Booking being considered for QA:', {
+      bookingId: booking.id,
+      bookingName: booking.name,
+      bookingStatus: booking.status,
+      bookingCurrentStage: booking.currentStage,
+      totalItems: items.length,
+      checkedInItemsCount: checkedInItems.length,
+      itemsInQualityCheckCount: itemsInQualityCheck.length,
+      allItemsInQualityCheck: allItemsInQualityCheck,
+      itemsInQualityCheck: itemsInQualityCheck.map(item => ({
+        id: item.id,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        status: item.status,
+        wrappingProgress: item.wrappingProgress,
+        wrappingProgressComplete: item.wrappingProgress ? 
+          `${item.wrappingProgress.filter(Boolean).length}/${item.wrappingProgress.length}` : 'N/A'
+      })),
+      itemsNotInQualityCheck: checkedInItems.filter(item => item.status !== 'quality_check').map(item => ({
+        id: item.id,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        status: item.status,
+        wrappingProgress: item.wrappingProgress,
+        wrappingProgressComplete: item.wrappingProgress ? 
+          `${item.wrappingProgress.filter(Boolean).length}/${item.wrappingProgress.length}` : 'N/A',
+        assignedWorker: item.assignedWorker
+      })),
+      allItemsStatus: checkedInItems.map(item => ({
+        id: item.id,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        status: item.status,
+        wrappingProgress: item.wrappingProgress,
+        wrappingProgressComplete: item.wrappingProgress ? 
+          `${item.wrappingProgress.filter(Boolean).length}/${item.wrappingProgress.length}` : 'N/A',
+        assignedWorker: item.assignedWorker
+      }))
+    })
+  }
+  
+  if (allItemsInQualityCheck) {
+    console.log(`✅ [QA DEBUG] Booking ${booking.id} moved to QA - ALL ${checkedInItems.length} items are in quality_check status`)
     return 'qa'
+  } else if (itemsInQualityCheck.length > 0) {
+    console.log(`❌ [QA DEBUG] Booking ${booking.id} should NOT be in QA - only ${itemsInQualityCheck.length}/${checkedInItems.length} items are in quality_check`)
+    // Some items are in quality_check but not all - check what other items are doing
+    const hasWrapping = checkedInItems.some(item => item.status === 'wrapping')
+    if (hasWrapping) {
+      console.log(`   → Showing in 'in_progress' because some items are still wrapping`)
+      return 'in_progress'
+    }
+    const hasCheckedIn = checkedInItems.some(item => item.status === 'checked_in')
+    if (hasCheckedIn) {
+      console.log(`   → Showing in 'unassigned' because some items are still checked_in`)
+      return 'unassigned'
+    }
+    // Fallback to assigned if items have workers but aren't wrapping
+    const hasAssigned = checkedInItems.some(item => item.assignedWorker)
+    if (hasAssigned) {
+      console.log(`   → Showing in 'assigned' because some items have assigned workers`)
+      return 'assigned'
+    }
   }
   
   // Priority 3: Check if any item is wrapping (in progress)

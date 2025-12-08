@@ -374,10 +374,92 @@ export const resolvers = {
     },
     size: async (parent: any) => {
       try {
-        if (!parent.sizeId) return null
         const db = await getDatabase()
-        const size = await db.collection('sizes').findOne({ id: parent.sizeId })
-        return size
+        
+        // If sizeId exists, use it
+        if (parent.sizeId) {
+          const size = await db.collection('sizes').findOne({ id: parent.sizeId })
+          if (size) return size
+        }
+        
+        // If no sizeId, try to infer from booking service
+        // First try to get bookingId from parent, or fetch from workOrder
+        let bookingId = parent.bookingId
+        if (!bookingId && parent.workOrderId) {
+          const workOrder = await db.collection('workOrders').findOne({ id: parent.workOrderId })
+          bookingId = workOrder?.bookingId || null
+        }
+        
+        if (!parent.sizeId && bookingId) {
+          const booking = await db.collection('bookings').findOne({ id: bookingId })
+          if (booking && booking.service) {
+            // Map service name to size
+            const serviceLower = booking.service.toLowerCase()
+            let sizeName = null
+            
+            // Check pricing table first to see if service maps to a size
+            const pricing = await db.collection('pricing').findOne({ 
+              $or: [
+                { id: booking.service },
+                { name: booking.service }
+              ]
+            })
+            
+            if (pricing && pricing.name) {
+              const pricingNameLower = pricing.name.toLowerCase()
+              if (pricingNameLower.includes('xsmall') || pricingNameLower.includes('extra-small')) {
+                sizeName = 'xsmall'
+              } else if (pricingNameLower.includes('small') && !pricingNameLower.includes('extra')) {
+                sizeName = 'small'
+              } else if (pricingNameLower.includes('medium')) {
+                sizeName = 'medium'
+              } else if (pricingNameLower.includes('large') || pricingNameLower.includes('odd')) {
+                sizeName = 'large'
+              } else if (pricingNameLower.includes('extra-large') || pricingNameLower.includes('fragile') || pricingNameLower.includes('xl')) {
+                sizeName = 'xl'
+              }
+            }
+            
+            // Fallback to direct service name matching
+            if (!sizeName) {
+              if (serviceLower.includes('xsmall') || serviceLower.includes('extra-small')) {
+                sizeName = 'xsmall'
+              } else if (serviceLower.includes('small') && !serviceLower.includes('extra')) {
+                sizeName = 'small'
+              } else if (serviceLower.includes('medium')) {
+                sizeName = 'medium'
+              } else if (serviceLower.includes('large') || serviceLower.includes('odd')) {
+                sizeName = 'large'
+              } else if (serviceLower.includes('extra-large') || serviceLower.includes('fragile') || serviceLower.includes('xl')) {
+                sizeName = 'xl'
+              }
+            }
+            
+            if (sizeName) {
+              const inferredSize = await db.collection('sizes').findOne({ name: sizeName })
+              if (inferredSize) {
+                // Update the item with the inferred sizeId for future queries
+                try {
+                  await db.collection('workItems').updateOne(
+                    { id: parent.id },
+                    { $set: { sizeId: inferredSize.id, updatedAt: new Date().toISOString() } }
+                  )
+                  console.log(`✅ Updated item ${parent.id} with sizeId ${inferredSize.id} (${inferredSize.displayName}) from booking service: ${booking.service}`)
+                } catch (updateError) {
+                  // Don't fail if update fails, just log it
+                  console.warn(`Could not update sizeId for item ${parent.id}:`, updateError)
+                }
+                return inferredSize
+              } else {
+                console.warn(`Size '${sizeName}' not found in database for item ${parent.id}`)
+              }
+            } else {
+              console.warn(`Could not infer size from booking service '${booking.service}' for item ${parent.id}`)
+            }
+          }
+        }
+        
+        return null
       } catch (error: any) {
         console.error('Error fetching size:', error)
         return null
@@ -2397,6 +2479,14 @@ export const resolvers = {
         const db = await getDatabase()
         const { id, status, assignedWorker, priority, notes } = args.input
         
+        // Get current work order to check previous status
+        const currentWorkOrder = await db.collection('workOrders').findOne({ id })
+        if (!currentWorkOrder) {
+          throw new Error(`Work order with id ${id} not found`)
+        }
+        
+        const previousStatus = currentWorkOrder.status
+        
         const update: any = { updatedAt: new Date().toISOString() }
         if (status !== undefined) update.status = status
         if (assignedWorker !== undefined) update.assignedWorker = assignedWorker
@@ -2413,8 +2503,48 @@ export const resolvers = {
         await db.collection('workOrders').updateOne({ id }, { $set: update })
         const updated = await db.collection('workOrders').findOne({ id })
         
-        if (!updated) {
-          throw new Error(`Work order with id ${id} not found`)
+        // If status changed to 'ready', check if it's a dropoff order and send email
+        if (status === 'ready' && previousStatus !== 'ready') {
+          try {
+            // Get the booking to check service category
+            const booking = await db.collection('bookings').findOne({ id: updated.bookingId })
+            if (booking) {
+              // Only send email if it hasn't been sent already
+              if (!booking.readyEmailSentAt) {
+                // Get pricing to determine service category
+                const pricing = await db.collection('pricing').findOne({ id: booking.service })
+                const serviceCategory = pricing?.serviceCategory || 'dropoff'
+                
+                // Only send email for dropoff orders
+                if (serviceCategory === 'dropoff') {
+                  console.log(`📧 WorkOrder ${updated.id} status changed to 'ready' - sending pickup email for dropoff booking ${booking.id}`)
+                  sendReadyForPickupEmail({
+                    name: booking.name,
+                    email: booking.email,
+                    date: booking.date,
+                    time: booking.time,
+                    id: booking.id,
+                    address: booking.address,
+                  }).then(() => {
+                    // Mark email as sent
+                    db.collection('bookings').updateOne(
+                      { id: booking.id },
+                      { $set: { readyEmailSentAt: new Date().toISOString() } }
+                    ).catch(err => console.error('Failed to update readyEmailSentAt:', err))
+                  }).catch((error) => {
+                    console.error('Failed to send ready for pickup email:', error)
+                  })
+                } else {
+                  console.log(`⏭️ Skipping pickup email for workOrder ${updated.id} - service category is '${serviceCategory}' (not dropoff)`)
+                }
+              } else {
+                console.log(`⏭️ Skipping pickup email for workOrder ${updated.id} - email already sent for booking ${booking.id}`)
+              }
+            }
+          } catch (error: any) {
+            console.error('Error checking service category for workOrder email:', error)
+            // Don't throw - allow workOrder update to succeed even if email check fails
+          }
         }
         
         return updated
@@ -2636,22 +2766,36 @@ export const resolvers = {
                     const verifyBooking = await db.collection('bookings').findOne({ id: booking.id })
                     if (verifyBooking && verifyBooking.status === 'ready') {
                       console.log(`✅ Booking ${booking.id} status confirmed as 'ready'`)
-                      console.log(`📧 Sending ready for pickup email for booking ${booking.id}`)
-                      sendReadyForPickupEmail({
-                        name: verifyBooking.name || booking.name,
-                        email: verifyBooking.email || booking.email,
-                        date: verifyBooking.date || booking.date,
-                        time: verifyBooking.time || booking.time,
-                        id: verifyBooking.id || booking.id,
-                        address: verifyBooking.address || booking.address,
-                      }).then(() => {
-                        db.collection('bookings').updateOne(
-                          { id: booking.id },
-                          { $set: { readyEmailSentAt: new Date().toISOString() } }
-                        ).catch(err => console.error('Failed to update readyEmailSentAt:', err))
-                      }).catch((error) => {
-                        console.error('Failed to send ready for pickup email:', error)
-                      })
+                      
+                      // Only send email if it hasn't been sent already
+                      if (!verifyBooking.readyEmailSentAt) {
+                        // Check if it's a dropoff order before sending email
+                        const pricing = await db.collection('pricing').findOne({ id: verifyBooking.service })
+                        const serviceCategory = pricing?.serviceCategory || 'dropoff'
+                        
+                        if (serviceCategory === 'dropoff') {
+                          console.log(`📧 Sending ready for pickup email for dropoff booking ${verifyBooking.id}`)
+                          sendReadyForPickupEmail({
+                            name: verifyBooking.name || booking.name,
+                            email: verifyBooking.email || booking.email,
+                            date: verifyBooking.date || booking.date,
+                            time: verifyBooking.time || booking.time,
+                            id: verifyBooking.id || booking.id,
+                            address: verifyBooking.address || booking.address,
+                          }).then(() => {
+                            db.collection('bookings').updateOne(
+                              { id: booking.id },
+                              { $set: { readyEmailSentAt: new Date().toISOString() } }
+                            ).catch(err => console.error('Failed to update readyEmailSentAt:', err))
+                          }).catch((error) => {
+                            console.error('Failed to send ready for pickup email:', error)
+                          })
+                        } else {
+                          console.log(`⏭️ Skipping pickup email for booking ${verifyBooking.id} - service category is '${serviceCategory}' (not dropoff)`)
+                        }
+                      } else {
+                        console.log(`⏭️ Skipping pickup email for booking ${verifyBooking.id} - email already sent`)
+                      }
                     }
                   } else if (!allBookingItemsReady && booking.status === 'ready') {
                     await db.collection('bookings').updateOne(

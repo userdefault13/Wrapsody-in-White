@@ -25,7 +25,7 @@
                   {{ hasExistingProgress ? 'Resume Wrapping' : 'Wrapping Instructions' }}
                 </h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Size: {{ item?.size || 'N/A' }} | Worker: {{ workerName }}
+                  Size: {{ getItemSizeDisplay(item) }} | Worker: {{ workerName }}
                   <span v-if="hasExistingProgress" class="ml-2 text-primary-600 dark:text-primary-400 font-medium">
                     ({{ completedStepsCount }} / {{ totalSteps }} steps completed)
                   </span>
@@ -69,7 +69,7 @@
                   <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span class="text-gray-600 dark:text-gray-400">Size:</span>
-                      <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ item.size || 'N/A' }}</span>
+                      <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ getItemSizeDisplay(item) }}</span>
                     </div>
                     <div v-if="item.wrappingStyle">
                       <span class="text-gray-600 dark:text-gray-400">Style:</span>
@@ -261,8 +261,53 @@ const saving = ref(false)
 // Track completed steps
 const completedSteps = ref([])
 
+const getItemSizeDisplay = (item) => {
+  if (!item) return 'N/A'
+  
+  // Check if size object exists (from GraphQL resolver)
+  if (item.size && typeof item.size === 'object') {
+    return item.size.displayName || item.size.name || 'N/A'
+  }
+  
+  // If sizeId exists but size object wasn't loaded, show sizeId
+  if (item.sizeId) {
+    return `Size ID: ${item.sizeId}`
+  }
+  
+  // Fallback to any size string that might exist
+  if (item.size && typeof item.size === 'string') {
+    return item.size
+  }
+  
+  return 'N/A'
+}
+
+const getSizeForInstructions = (item) => {
+  if (!item) return ''
+  
+  // Try to get size name from size object
+  if (item.size && typeof item.size === 'object') {
+    return (item.size.name || item.size.displayName || '').toLowerCase()
+  }
+  
+  // Try to extract from sizeId (e.g., "size-xsmall" -> "xsmall")
+  if (item.sizeId) {
+    const match = item.sizeId.match(/size-(\w+)/)
+    if (match) {
+      return match[1].toLowerCase()
+    }
+  }
+  
+  // Fallback to size string
+  if (item.size && typeof item.size === 'string') {
+    return item.size.toLowerCase()
+  }
+  
+  return ''
+}
+
 const instructions = computed(() => {
-  const size = props.item?.size?.toLowerCase() || ''
+  const size = getSizeForInstructions(props.item)
   
   // Base instructions for all sizes
   const baseInstructions = [
@@ -388,7 +433,7 @@ const instructions = computed(() => {
 })
 
 const tips = computed(() => {
-  const size = props.item?.size?.toLowerCase() || ''
+  const size = getSizeForInstructions(props.item)
   
   if (size.includes('fragile')) {
     return [
@@ -581,7 +626,7 @@ const handleComplete = async () => {
 
   saving.value = true
   try {
-    // Save progress and update status in a single mutation
+    // Save progress first (but don't change status yet - let parent check all items)
     const mutation = `
       mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
         updateWorkItem(input: $input) {
@@ -592,15 +637,18 @@ const handleComplete = async () => {
       }
     `
     
+    // Save wrapping progress but keep status as 'wrapping' for now
+    // The parent will check if ALL items are 100% complete before moving to quality_check
     await executeQuery(mutation, {
       input: {
         id: props.item.id,
-        wrappingProgress: completedSteps.value,
-        status: 'quality_check'
+        wrappingProgress: completedSteps.value
+        // Don't change status here - let parent handle it after checking all items
       }
     })
 
     // Emit complete event with bookingId so parent can check for next items
+    // The parent will check if ALL items have 100% wrapping progress before moving to QA
     emit('complete', {
       item: props.item,
       bookingId: props.item.bookingId

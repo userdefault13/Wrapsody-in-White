@@ -158,6 +158,7 @@
       :is-open="showItemDetail"
       :item="selectedItem"
       :booking="getBookingForItem(selectedItem)"
+      :workers="workersMap"
       @close="closeItemDetail"
       @updated="handleItemUpdated"
       @start-wrapping="handleStartWrapping"
@@ -188,6 +189,98 @@
       @move-back="handleQualityCheckMoveBack"
     />
 
+    <!-- Work Order Details Modal -->
+    <WorkOrderDetailsModal
+      v-if="selectedWorkOrderBooking"
+      :is-open="showWorkOrderDetails"
+      :booking="selectedWorkOrderBooking"
+      :workers="workersMap"
+      @close="closeWorkOrderDetails"
+      @view-item="handleWorkOrderViewItem"
+    />
+
+    <!-- Next Item Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-300"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-200"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="nextItemModal.show"
+          class="fixed inset-0 z-50 overflow-y-auto"
+          @click.self="handleDeclineNextItem"
+        >
+          <div class="flex min-h-screen items-center justify-center p-4">
+            <div
+              class="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl"
+              @click.stop
+            >
+              <!-- Header -->
+              <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+                  Next Item Available
+                </h2>
+                <button
+                  @click="handleDeclineNextItem"
+                  class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Content -->
+              <div class="p-6">
+                <p class="text-gray-700 dark:text-gray-300 mb-4">
+                  You've completed wrapping one item, but there's another item waiting to be wrapped for this order.
+                </p>
+                
+                <div v-if="nextItemModal.item" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                  <h3 class="font-semibold text-gray-900 dark:text-white mb-2">
+                    {{ nextItemModal.item.description || `Item ${nextItemModal.item.itemNumber}` }}
+                  </h3>
+                  <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <p v-if="nextItemModal.item.sizeId">Size: Size ID: {{ nextItemModal.item.sizeId }}</p>
+                    <p v-if="nextItemModal.item.wrappingStyle">Style: {{ nextItemModal.item.wrappingStyle }}</p>
+                    <p>Status: {{ nextItemModal.item.status === 'checked_in' ? 'Checked In (Unassigned)' : 'In Progress' }}</p>
+                  </div>
+                </div>
+
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Would you like to be assigned to this item and start wrapping it?
+                </p>
+              </div>
+
+              <!-- Footer -->
+              <div class="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  @click="handleDeclineNextItem"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  No, Thanks
+                </button>
+                <button
+                  @click="handleAcceptNextItem"
+                  class="px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors flex items-center gap-2"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Yes, Start Wrapping
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
 
@@ -202,6 +295,7 @@ import ItemDetailModal from '~/components/ItemDetailModal.vue'
 import PaymentAdjustmentModal from '~/components/PaymentAdjustmentModal.vue'
 import WrappingInstructionModal from '~/components/WrappingInstructionModal.vue'
 import QualityCheckModal from '~/components/QualityCheckModal.vue'
+import WorkOrderDetailsModal from '~/components/WorkOrderDetailsModal.vue'
 
 definePageMeta({
   layout: false,
@@ -237,6 +331,8 @@ const workersMap = computed(() => {
   })
   return map
 })
+const showWorkOrderDetails = ref(false)
+const selectedWorkOrderBooking = ref(null)
 
 const filteredBookings = computed(() => {
   if (!searchQuery.value) return bookings.value
@@ -313,32 +409,38 @@ const loadBookings = async () => {
           status
           currentStage
           checkedInAt
-          items {
+          workOrders {
             id
-            bookingId
-            itemNumber
-            description
-            sizeId
-            size {
-              id
-              name
-              displayName
-            }
-            photos
-            serialNumber
-            serialNumberPhoto
-            specialInstructions
-            wrappingStyle
+            workOrderNumber
             status
-            assignedWorker
-            isExpensiveElectronics
-            checkedInAt
-            wrappingStartedAt
-            wrappingCompletedAt
-            wrappingProgress
-            qualityCheckProgress
-            qualityCheckedAt
-            readyAt
+            items {
+              id
+              workOrderId
+              bookingId
+              itemNumber
+              description
+              sizeId
+              size {
+                id
+                name
+                displayName
+              }
+              photos
+              serialNumber
+              serialNumberPhoto
+              specialInstructions
+              wrappingStyle
+              status
+              assignedWorker
+              isExpensiveElectronics
+              checkedInAt
+              wrappingStartedAt
+              wrappingCompletedAt
+              wrappingProgress
+              qualityCheckProgress
+              qualityCheckedAt
+              readyAt
+            }
           }
         }
       }
@@ -350,7 +452,14 @@ const loadBookings = async () => {
     
     console.log('Loaded bookings:', data.terminalBookings?.length || 0)
     console.log('Bookings data:', data.terminalBookings)
-    bookings.value = data.terminalBookings || []
+    
+    // Flatten workOrders.items into booking.items for compatibility
+    const bookingsWithItems = (data.terminalBookings || []).map(booking => ({
+      ...booking,
+      items: booking.workOrders?.flatMap(wo => wo.items || []) || []
+    }))
+    
+    bookings.value = bookingsWithItems
   } catch (error) {
     console.error('Error loading bookings:', error)
     bookings.value = []
@@ -521,6 +630,12 @@ const handleProgressSaved = () => {
   loadBookings()
 }
 
+const nextItemModal = ref({
+  show: false,
+  item: null,
+  booking: null
+})
+
 const handleWrappingComplete = async (data) => {
   try {
     const item = data.item || data
@@ -537,79 +652,132 @@ const handleWrappingComplete = async (data) => {
       return
     }
 
-    // Filter items that need wrapping (status is wrapping or checked_in)
-    const itemsNeedingWrapping = booking.items.filter((i) => {
-      return i.status === 'wrapping' || i.status === 'checked_in'
+    // Get all checked-in items (exclude pending_checkin)
+    const allCheckedInItems = booking.items.filter((i) => i.status !== 'pending_checkin')
+    
+    // Check if ALL items have 100% wrapping progress
+    const allItemsHave100PercentWrapping = allCheckedInItems.every((i) => {
+      if (!i.wrappingProgress || !Array.isArray(i.wrappingProgress)) return false
+      const totalSteps = i.wrappingProgress.length
+      if (totalSteps === 0) return false
+      const completedSteps = i.wrappingProgress.filter(Boolean).length
+      return completedSteps === totalSteps
     })
 
-    // Check if there are more items that need wrapping
-    if (itemsNeedingWrapping.length > 0) {
-      // Find the next item that needs wrapping (excluding the one just completed)
-      const nextItem = itemsNeedingWrapping.find((i) => i.id !== item.id) || itemsNeedingWrapping[0]
+    // If not all items are 100% complete, check for items waiting to be assigned/wrapped
+    if (!allItemsHave100PercentWrapping) {
+      // Find items that are checked_in (not yet assigned/wrapped)
+      const unassignedItems = allCheckedInItems.filter((i) => {
+        return i.status === 'checked_in' && !i.assignedWorker
+      })
+
+      // Also find items that are wrapping but not 100% complete
+      const incompleteWrappingItems = allCheckedInItems.filter((i) => {
+        if (i.status !== 'wrapping') return false
+        if (!i.wrappingProgress || !Array.isArray(i.wrappingProgress)) return true
+        const totalSteps = i.wrappingProgress.length
+        if (totalSteps === 0) return true
+        const completedSteps = i.wrappingProgress.filter(Boolean).length
+        return completedSteps < totalSteps
+      })
+
+      // Find the next item to wrap (prioritize unassigned items)
+      const nextItem = unassignedItems[0] || incompleteWrappingItems.find((i) => i.id !== item.id) || incompleteWrappingItems[0]
       
       if (nextItem && nextItem.id !== item.id) {
-        // Open wrapping modal for the next item
-        console.log('Opening wrapping modal for next item:', nextItem.id)
-        
-        // Get the worker who was wrapping (if available)
-        const worker = wrappingWorker.value
-        
-        // Open the next item's wrapping modal
-        handleStartWrapping({
+        // Show modal asking if worker wants to take the next item
+        nextItemModal.value = {
+          show: true,
           item: nextItem,
-          worker: worker || { id: nextItem.assignedWorker }
-        })
-        
-        // Show a message to the user
-        alert(`Item "${item.description || item.id}" completed! Moving to next item: "${nextItem.description || nextItem.id}"`)
+          booking: booking
+        }
+        closeWrappingInstruction()
         return
       }
     }
 
-    // No more items need wrapping - check if all items are 100% complete
-    const allCheckedInItems = booking.items.filter((i) => i.status !== 'pending_checkin')
-    const allItemsComplete = allCheckedInItems.every((i) => {
-      // Check if item has wrappingProgress and it's 100% complete
-      if (!i.wrappingProgress || !Array.isArray(i.wrappingProgress)) {
-        return false
-      }
+    // All items are 100% complete - NOW we can move this item to QA
+    // Update the current item's status to quality_check
+    try {
+      const updateMutation = `
+        mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+          updateWorkItem(input: $input) {
+            id
+            status
+            wrappingCompletedAt
+          }
+        }
+      `
       
-      // All steps must be true (completed)
-      const totalSteps = i.wrappingProgress.length
-      const completedSteps = i.wrappingProgress.filter(Boolean).length
-      
-      // Item must be at quality_check or ready status AND have 100% wrapping progress
-      return (i.status === 'quality_check' || i.status === 'ready') && 
-             completedSteps === totalSteps && 
-             totalSteps > 0
-    })
-
-    if (!allItemsComplete) {
-      // Some items are not 100% complete - show warning
-      const incompleteItems = allCheckedInItems.filter((i) => {
-        if (!i.wrappingProgress || !Array.isArray(i.wrappingProgress)) return true
-        const totalSteps = i.wrappingProgress.length
-        const completedSteps = i.wrappingProgress.filter(Boolean).length
-        return !(i.status === 'quality_check' || i.status === 'ready') || 
-               completedSteps !== totalSteps || 
-               totalSteps === 0
+      await executeQuery(updateMutation, {
+        input: {
+          id: item.id,
+          status: 'quality_check'
+        }
       })
       
-      console.warn('Not all items are 100% complete:', incompleteItems.map((i) => ({
-        id: i.id,
-        status: i.status,
-        progress: i.wrappingProgress
-      })))
+      console.log(`✅ Item ${item.id} moved to QA - all items have 100% wrapping progress`)
+    } catch (error) {
+      console.error('Error moving item to QA:', error)
+      alert('Failed to move item to quality check. Please try again.')
     }
 
-    // Close modal and refresh
     closeWrappingInstruction()
+    
+    // Refresh to show updated status
     await loadBookings()
   } catch (error) {
-    console.error('Error completing wrapping:', error)
-    alert('Failed to mark item as complete. Please try again.')
+    console.error('Error handling wrapping complete:', error)
     closeWrappingInstruction()
   }
+}
+
+const handleAcceptNextItem = async () => {
+  if (!nextItemModal.value.item || !wrappingWorker.value) return
+  
+  const nextItem = nextItemModal.value.item
+  nextItemModal.value.show = false
+  
+  // Assign the worker to the next item and start wrapping
+  try {
+    // First, assign the worker to the item
+    const assignMutation = `
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
+          id
+          status
+          assignedWorker
+          wrappingStartedAt
+        }
+      }
+    `
+    
+    await executeQuery(assignMutation, {
+      input: {
+        id: nextItem.id,
+        status: 'wrapping',
+        assignedWorker: wrappingWorker.value.id
+      }
+    })
+    
+    // Refresh bookings
+    await loadBookings()
+    
+    // Open wrapping modal for the next item
+    handleStartWrapping({
+      item: nextItem,
+      worker: wrappingWorker.value
+    })
+  } catch (error) {
+    console.error('Error accepting next item:', error)
+    alert('Failed to assign next item. Please try again.')
+  }
+}
+
+const handleDeclineNextItem = () => {
+  nextItemModal.value.show = false
+  // Refresh to show current state
+  loadBookings()
 }
 
 const handleStartQualityCheck = async (data) => {
@@ -699,17 +867,20 @@ const handleGroupClick = (data) => {
     return
   }
   
-  // When clicking on a booking group with checked-in items, open the first unassigned item for assignment
-  // Or if all items are assigned, open the first item for viewing
-  if (items && items.length > 0) {
-    // Find first unassigned item, or first item if all are assigned
-    const unassignedItem = items.find(item => !item.assignedWorker && item.status === 'checked_in')
-    const itemToOpen = unassignedItem || items[0]
-    
-    if (itemToOpen) {
-      handleViewDetails(itemToOpen)
-    }
-  }
+  // Open work order details modal
+  selectedWorkOrderBooking.value = booking
+  showWorkOrderDetails.value = true
+}
+
+const handleWorkOrderViewItem = (item) => {
+  // Close work order modal and open item detail modal
+  showWorkOrderDetails.value = false
+  handleViewDetails(item)
+}
+
+const closeWorkOrderDetails = () => {
+  showWorkOrderDetails.value = false
+  selectedWorkOrderBooking.value = null
 }
 
 const handleLogout = () => {

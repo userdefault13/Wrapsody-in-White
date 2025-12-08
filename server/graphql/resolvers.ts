@@ -279,35 +279,47 @@ export const resolvers = {
   },
 
   Booking: {
+    workOrders: async (parent: any) => {
+      try {
+        const db = await getDatabase()
+        const workOrders = await db.collection('workOrders')
+          .find({ bookingId: parent.id })
+          .sort({ workOrderNumber: 1 })
+          .toArray()
+        
+        return workOrders
+      } catch (error: any) {
+        console.error('Error fetching work orders:', error)
+        return []
+      }
+    },
+    // Legacy support: flatten all workItems from all workOrders into a single items array
     items: async (parent: any) => {
       try {
         const db = await getDatabase()
-        const items = await db.collection('bookingItems')
+        const workOrders = await db.collection('workOrders')
           .find({ bookingId: parent.id })
-          .sort({ itemNumber: 1 })
+          .sort({ workOrderNumber: 1 })
           .toArray()
         
-        // Map legacy status values to valid GraphQL enum values
-        const mapItemStatus = (status: string) => {
-          const statusMap: Record<string, string> = {
-            'started': 'wrapping',
-            'assigned': 'checked_in',
-            'staging': 'wrapping',
-            'cutting': 'wrapping',
-            'ribbon': 'quality_check',
-            'tag': 'quality_check',
-            'complete': 'ready'
-          }
-          return statusMap[status] || status
+        // Get all workItems from all workOrders
+        const allItems = []
+        for (const workOrder of workOrders) {
+          const items = await db.collection('workItems')
+            .find({ workOrderId: workOrder.id })
+            .sort({ itemNumber: 1 })
+            .toArray()
+          
+          // Add items with workOrder context
+          allItems.push(...items.map((item: any) => ({
+            ...item,
+            bookingId: parent.id, // Ensure bookingId is set
+            wrappingProgress: Array.isArray(item.wrappingProgress) ? item.wrappingProgress : [],
+            qualityCheckProgress: Array.isArray(item.qualityCheckProgress) ? item.qualityCheckProgress : []
+          })))
         }
         
-        // Normalize item statuses and ensure wrappingProgress and qualityCheckProgress are always arrays
-        return items.map((item: any) => ({
-          ...item,
-          status: mapItemStatus(item.status || 'pending_checkin'),
-          wrappingProgress: Array.isArray(item.wrappingProgress) ? item.wrappingProgress : [],
-          qualityCheckProgress: Array.isArray(item.qualityCheckProgress) ? item.qualityCheckProgress : []
-        }))
+        return allItems
       } catch (error: any) {
         console.error('Error fetching booking items:', error)
         return []
@@ -321,6 +333,55 @@ export const resolvers = {
     },
     currentStage: async (parent: any) => {
       return parent.currentStage || 'awaiting_checkin'
+    }
+  },
+
+  WorkOrder: {
+    items: async (parent: any) => {
+      try {
+        const db = await getDatabase()
+        const items = await db.collection('workItems')
+          .find({ workOrderId: parent.id })
+          .sort({ itemNumber: 1 })
+          .toArray()
+        
+        return items.map((item: any) => ({
+          ...item,
+          wrappingProgress: Array.isArray(item.wrappingProgress) ? item.wrappingProgress : [],
+          qualityCheckProgress: Array.isArray(item.qualityCheckProgress) ? item.qualityCheckProgress : []
+        }))
+      } catch (error: any) {
+        console.error('Error fetching work items:', error)
+        return []
+      }
+    }
+  },
+
+  WorkItem: {
+    bookingId: async (parent: any) => {
+      // If bookingId is already set (from Booking.items resolver), return it
+      if (parent.bookingId) return parent.bookingId
+      
+      // Otherwise, get it from the workOrder
+      try {
+        const db = await getDatabase()
+        const workOrder = await db.collection('workOrders').findOne({ id: parent.workOrderId })
+        return workOrder?.bookingId || null
+      } catch (error: any) {
+        console.error('Error fetching bookingId for workItem:', error)
+        return null
+      }
+    },
+    size: async (parent: any) => {
+      try {
+        if (!parent.sizeId) return null
+        const db = await getDatabase()
+        const size = await db.collection('sizes').findOne({ id: parent.sizeId })
+        return size
+      } catch (error: any) {
+        console.error('Error fetching size:', error)
+        return null
+      }
     }
   },
 
@@ -798,38 +859,101 @@ export const resolvers = {
       }
     },
 
-    bookingItems: async (_: any, args: { bookingId: string }) => {
+    sizes: async (_: any, args: { active?: boolean }) => {
       try {
         const db = await getDatabase()
-        const items = await db.collection('bookingItems')
-          .find({ bookingId: args.bookingId })
+        const query: any = {}
+        if (args.active !== undefined) query.active = args.active
+        
+        const sizes = await db.collection('sizes')
+          .find(query)
+          .sort({ order: 1 })
+          .toArray()
+        
+        return sizes
+      } catch (error: any) {
+        console.error('Error fetching sizes:', error)
+        return []
+      }
+    },
+    
+    size: async (_: any, args: { id?: string; name?: string }) => {
+      try {
+        const db = await getDatabase()
+        const query: any = {}
+        if (args.id) query.id = args.id
+        if (args.name) query.name = args.name
+        
+        const size = await db.collection('sizes').findOne(query)
+        return size
+      } catch (error: any) {
+        console.error('Error fetching size:', error)
+        return null
+      }
+    },
+    
+    workOrders: async (_: any, args: { bookingId?: string; status?: string; assignedWorker?: string }) => {
+      try {
+        const db = await getDatabase()
+        const query: any = {}
+        
+        if (args.bookingId) query.bookingId = args.bookingId
+        if (args.status) query.status = args.status
+        if (args.assignedWorker) query.assignedWorker = args.assignedWorker
+        
+        const workOrders = await db.collection('workOrders')
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray()
+        
+        return workOrders
+      } catch (error: any) {
+        console.error('Error fetching work orders:', error)
+        throw new Error(`Failed to fetch work orders: ${error.message}`)
+      }
+    },
+    
+    workOrder: async (_: any, args: { id: string }) => {
+      try {
+        const db = await getDatabase()
+        const workOrder = await db.collection('workOrders').findOne({ id: args.id })
+        if (!workOrder) {
+          throw new Error(`Work order with id ${args.id} not found`)
+        }
+        return workOrder
+      } catch (error: any) {
+        console.error('Error fetching work order:', error)
+        throw new Error(`Failed to fetch work order: ${error.message}`)
+      }
+    },
+    
+    workItems: async (_: any, args: { workOrderId: string }) => {
+      try {
+        const db = await getDatabase()
+        const items = await db.collection('workItems')
+          .find({ workOrderId: args.workOrderId })
           .sort({ itemNumber: 1 })
           .toArray()
         
-        // Map legacy status values to valid GraphQL enum values
-        const mapItemStatus = (status: string) => {
-          const statusMap: Record<string, string> = {
-            'started': 'wrapping',
-            'assigned': 'checked_in',
-            'staging': 'wrapping',
-            'cutting': 'wrapping',
-            'ribbon': 'quality_check',
-            'tag': 'quality_check',
-            'complete': 'ready'
-          }
-          return statusMap[status] || status
-        }
-        
-        // Normalize item statuses and ensure wrappingProgress and qualityCheckProgress are always arrays
         return items.map((item: any) => ({
           ...item,
-          status: mapItemStatus(item.status || 'pending_checkin'),
           wrappingProgress: Array.isArray(item.wrappingProgress) ? item.wrappingProgress : [],
           qualityCheckProgress: Array.isArray(item.qualityCheckProgress) ? item.qualityCheckProgress : []
         }))
       } catch (error: any) {
-        console.error('Error fetching booking items:', error)
+        console.error('Error fetching work items:', error)
         return []
+      }
+    },
+    
+    workItem: async (_: any, args: { id: string }) => {
+      try {
+        const db = await getDatabase()
+        const item = await db.collection('workItems').findOne({ id: args.id })
+        return item
+      } catch (error: any) {
+        console.error('Error fetching work item:', error)
+        return null
       }
     },
 
@@ -862,48 +986,26 @@ export const resolvers = {
         
         console.log(`Found ${bookings.length} bookings in database`)
         
-        // For each booking, fetch its items
-        const bookingsWithItems = await Promise.all(bookings.map(async (booking: any) => {
-          const items = await db.collection('bookingItems')
+        // For each booking, fetch its work orders
+        const bookingsWithWorkOrders = await Promise.all(bookings.map(async (booking: any) => {
+          const workOrders = await db.collection('workOrders')
             .find({ bookingId: booking.id })
-            .sort({ itemNumber: 1 })
+            .sort({ workOrderNumber: 1 })
             .toArray()
           
           // Set default currentStage if not set
           const currentStage = booking.currentStage || 'awaiting_checkin'
           
-          // Map legacy status values to valid GraphQL enum values
-          const mapItemStatus = (status: string) => {
-            const statusMap: Record<string, string> = {
-              'started': 'wrapping',
-              'assigned': 'checked_in',
-              'staging': 'wrapping',
-              'cutting': 'wrapping',
-              'ribbon': 'quality_check',
-              'tag': 'quality_check',
-              'complete': 'ready'
-            }
-            return statusMap[status] || status
-          }
-          
-          // Normalize item statuses and ensure wrappingProgress and qualityCheckProgress are always arrays
-          const normalizedItems = (items || []).map((item: any) => ({
-            ...item,
-            status: mapItemStatus(item.status || 'pending_checkin'),
-            wrappingProgress: Array.isArray(item.wrappingProgress) ? item.wrappingProgress : [],
-            qualityCheckProgress: Array.isArray(item.qualityCheckProgress) ? item.qualityCheckProgress : []
-          }))
-          
           return { 
             ...booking,
             status: booking.status,
             currentStage: currentStage,
-            items: normalizedItems
+            workOrders: workOrders
           }
         }))
         
-        console.log(`Returning ${bookingsWithItems.length} bookings with items`)
-        return bookingsWithItems
+        console.log(`Returning ${bookingsWithWorkOrders.length} bookings with work orders`)
+        return bookingsWithWorkOrders
       } catch (error: any) {
         console.error('Error fetching terminal bookings:', error)
         return []
@@ -1230,10 +1332,16 @@ export const resolvers = {
       if (status === 'in_progress' && previousStatus !== 'pending') {
         const booking = currentBooking
         
-        // Count checked-in items (exclude pending_checkin items)
-        const checkedInItems = await db.collection('bookingItems')
+        // Count checked-in work items (exclude pending_checkin items)
+        // Get all work orders for this booking
+        const workOrders = await db.collection('workOrders')
+          .find({ bookingId: id })
+          .toArray()
+        
+        const workOrderIds = workOrders.map(wo => wo.id)
+        const checkedInItems = await db.collection('workItems')
           .find({ 
-            bookingId: id,
+            workOrderId: { $in: workOrderIds },
             status: { $ne: 'pending_checkin' }
           })
           .toArray()
@@ -2123,35 +2231,39 @@ export const resolvers = {
           throw new Error('Booking not found')
         }
         
-        // Count checked-in items (exclude pending_checkin items)
-        const checkedInItems = await db.collection('bookingItems')
-          .find({ 
+        // Check if work order already exists for this booking
+        let workOrder = await db.collection('workOrders').findOne({ 
+          bookingId: bookingId,
+          workOrderNumber: 1
+        })
+        
+        let workOrderId
+        if (workOrder) {
+          // Use existing work order
+          workOrderId = workOrder.id
+          console.log(`📦 Using existing work order ${workOrderId} for booking ${bookingId}`)
+        } else {
+          // Create a new work order for this booking
+          workOrderId = `workorder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          workOrder = {
+            id: workOrderId,
             bookingId: bookingId,
-            status: { $ne: 'pending_checkin' }
-          })
-          .toArray()
-        
-        const checkedInItemsCount = checkedInItems.length
-        const expectedItemsCount = booking.numberOfGifts || 0
-        
-        // Validate that number of checked-in items matches numberOfGifts
-        if (checkedInItemsCount !== expectedItemsCount) {
-          throw new Error(
-            `Cannot set booking to in_progress: Expected ${expectedItemsCount} item(s) but found ${checkedInItemsCount} checked-in item(s). ` +
-            `Please ensure all ${expectedItemsCount} item(s) are checked in before starting the order.`
-          )
+            workOrderNumber: 1,
+            status: 'pending',
+            assignedWorker: null,
+            priority: 0,
+            notes: null,
+            startedAt: null,
+            completedAt: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          
+          await db.collection('workOrders').insertOne(workOrder)
+          console.log(`✅ Created new work order ${workOrderId} for booking ${bookingId}`)
         }
         
-        if (checkedInItemsCount === 0) {
-          throw new Error(
-            `Cannot set booking to in_progress: No items have been checked in. ` +
-            `Please check in ${expectedItemsCount} item(s) before starting the order.`
-          )
-        }
-        
-        // All items are checked in, proceed with check-in
-        // Don't automatically change status to in_progress - keep it as pending
-        // This allows orders to show in "Unassigned" column until items are actually assigned/started
+        // Update booking
         const update: any = {
           currentStage: 'checked_in',
           checkedInAt: new Date().toISOString(),
@@ -2160,56 +2272,192 @@ export const resolvers = {
         }
         
         // Keep status as pending (or current status if already set) - don't auto-change to in_progress
-        // Status will change to in_progress when items are assigned or wrapping actually starts
         if (!booking.status || booking.status === 'pending') {
           update.status = 'pending' // Keep as pending to show in unassigned column
         }
-        // If status is already something else, don't change it
         
         await db.collection('bookings').updateOne(
           { id: bookingId },
           { $set: update }
         )
         
-        console.log(`✅ Booking ${bookingId} checked in successfully with ${checkedInItemsCount} item(s) - status kept as pending (will show in Unassigned)`)
+        console.log(`✅ Booking ${bookingId} checked in successfully - work order created`)
         
         const updated = await db.collection('bookings').findOne({ id: bookingId })
         return {
           ...updated,
           status: updated.status === 'confirmed' ? 'pending' : updated.status,
-          items: []
+          workOrders: [workOrder]
         }
       } catch (error: any) {
         console.error('Error in checkInBooking resolver:', error)
         throw new Error(`Failed to check in booking: ${error.message}`)
       }
     },
-    addBookingItem: async (_: any, args: { input: any }) => {
+    createSize: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
-        const { bookingId, itemNumber, description, size, photos, serialNumber, serialNumberPhoto, specialInstructions, wrappingStyle, isExpensiveElectronics, isLargerThanPaidSize, isSmallerThanPaidSize } = args.input
+        const { name, displayName, order, active } = args.input
         
-        // Generate unique ID
-        const itemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        const sizeId = `size-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        
+        const size = {
+          id: sizeId,
+          name: name,
+          displayName: displayName,
+          order: order,
+          active: active !== undefined ? active : true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        await db.collection('sizes').insertOne(size)
+        return size
+      } catch (error: any) {
+        console.error('Error in createSize resolver:', error)
+        throw new Error(`Failed to create size: ${error.message}`)
+      }
+    },
+    
+    updateSize: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { id, displayName, order, active } = args.input
+        
+        const update: any = { updatedAt: new Date().toISOString() }
+        if (displayName !== undefined) update.displayName = displayName
+        if (order !== undefined) update.order = order
+        if (active !== undefined) update.active = active
+        
+        await db.collection('sizes').updateOne({ id }, { $set: update })
+        const updated = await db.collection('sizes').findOne({ id })
+        
+        if (!updated) {
+          throw new Error(`Size with id ${id} not found`)
+        }
+        
+        return updated
+      } catch (error: any) {
+        console.error('Error in updateSize resolver:', error)
+        throw new Error(`Failed to update size: ${error.message}`)
+      }
+    },
+    
+    deleteSize: async (_: any, args: { id: string }) => {
+      try {
+        const db = await getDatabase()
+        const result = await db.collection('sizes').deleteOne({ id: args.id })
+        return result.deletedCount > 0
+      } catch (error: any) {
+        console.error('Error in deleteSize resolver:', error)
+        throw new Error(`Failed to delete size: ${error.message}`)
+      }
+    },
+    
+    createWorkOrder: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { bookingId, workOrderNumber, priority, notes } = args.input
+        
+        // Check if work order number already exists for this booking
+        const existing = await db.collection('workOrders').findOne({
+          bookingId,
+          workOrderNumber
+        })
+        if (existing) {
+          throw new Error(`Work order number ${workOrderNumber} already exists for this booking`)
+        }
+        
+        const workOrderId = `workorder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        
+        const workOrder = {
+          id: workOrderId,
+          bookingId: bookingId,
+          workOrderNumber: workOrderNumber,
+          status: 'pending',
+          assignedWorker: null,
+          priority: priority || 0,
+          notes: notes || null,
+          startedAt: null,
+          completedAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        await db.collection('workOrders').insertOne(workOrder)
+        return workOrder
+      } catch (error: any) {
+        console.error('Error in createWorkOrder resolver:', error)
+        throw new Error(`Failed to create work order: ${error.message}`)
+      }
+    },
+    
+    updateWorkOrder: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { id, status, assignedWorker, priority, notes } = args.input
+        
+        const update: any = { updatedAt: new Date().toISOString() }
+        if (status !== undefined) update.status = status
+        if (assignedWorker !== undefined) update.assignedWorker = assignedWorker
+        if (priority !== undefined) update.priority = priority
+        if (notes !== undefined) update.notes = notes
+        
+        if (status === 'in_progress' && !update.startedAt) {
+          update.startedAt = new Date().toISOString()
+        }
+        if (status === 'completed' && !update.completedAt) {
+          update.completedAt = new Date().toISOString()
+        }
+        
+        await db.collection('workOrders').updateOne({ id }, { $set: update })
+        const updated = await db.collection('workOrders').findOne({ id })
+        
+        if (!updated) {
+          throw new Error(`Work order with id ${id} not found`)
+        }
+        
+        return updated
+      } catch (error: any) {
+        console.error('Error in updateWorkOrder resolver:', error)
+        throw new Error(`Failed to update work order: ${error.message}`)
+      }
+    },
+    
+    addWorkItem: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { workOrderId, itemNumber, description, sizeId, photos, serialNumber, serialNumberPhoto, specialInstructions, wrappingStyle, isExpensiveElectronics, isLargerThanPaidSize, isSmallerThanPaidSize } = args.input
+        
+        // Check if item number already exists for this work order
+        const existing = await db.collection('workItems').findOne({
+          workOrderId,
+          itemNumber
+        })
+        if (existing) {
+          throw new Error(`Item number ${itemNumber} already exists for this work order`)
+        }
+        
+        const itemId = `workitem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         
         const item = {
           id: itemId,
-          bookingId: bookingId,
+          workOrderId: workOrderId,
           itemNumber: itemNumber,
           description: description || null,
-          size: size || null,
+          sizeId: sizeId || null,
           photos: photos || [],
           serialNumber: serialNumber || null,
           serialNumberPhoto: serialNumberPhoto || null,
           specialInstructions: specialInstructions || null,
           wrappingStyle: wrappingStyle || null,
           materialsUsed: [],
-          status: 'checked_in',
+          status: 'pending_checkin',
           assignedWorker: null,
           isExpensiveElectronics: isExpensiveElectronics || false,
           isLargerThanPaidSize: isLargerThanPaidSize || false,
           isSmallerThanPaidSize: isSmallerThanPaidSize || false,
-          checkedInAt: new Date().toISOString(),
+          checkedInAt: null,
           wrappingStartedAt: null,
           wrappingCompletedAt: null,
           wrappingProgress: [],
@@ -2221,14 +2469,14 @@ export const resolvers = {
           updatedAt: new Date().toISOString()
         }
         
-        await db.collection('bookingItems').insertOne(item)
+        await db.collection('workItems').insertOne(item)
         return item
       } catch (error: any) {
-        console.error('Error in addBookingItem resolver:', error)
-        throw new Error(`Failed to add booking item: ${error.message}`)
+        console.error('Error in addWorkItem resolver:', error)
+        throw new Error(`Failed to add work item: ${error.message}`)
       }
     },
-    updateBookingItem: async (_: any, args: { input: any }) => {
+    updateWorkItem: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
         const { id, status, assignedWorker, materialsUsed, ...updates } = args.input
@@ -2239,7 +2487,7 @@ export const resolvers = {
         
         // Update fields if provided
         if (updates.description !== undefined) update.description = updates.description
-        if (updates.size !== undefined) update.size = updates.size
+        if (updates.sizeId !== undefined) update.sizeId = updates.sizeId
         if (updates.photos !== undefined) update.photos = updates.photos
         if (updates.serialNumber !== undefined) update.serialNumber = updates.serialNumber
         if (updates.serialNumberPhoto !== undefined) update.serialNumberPhoto = updates.serialNumberPhoto
@@ -2253,7 +2501,7 @@ export const resolvers = {
           // Validate wrapping completion before allowing status change to quality_check
           if (status === 'quality_check') {
             // Get current item to check wrapping progress
-            const currentItem = await db.collection('bookingItems').findOne({ id: id })
+            const currentItem = await db.collection('workItems').findOne({ id: id })
             if (currentItem) {
               const wrappingProgress = updates.wrappingProgress !== undefined 
                 ? updates.wrappingProgress 
@@ -2283,7 +2531,13 @@ export const resolvers = {
           
           update.status = status
           // Set timestamps based on status
-          if (status === 'wrapping' && !updates.wrappingStartedAt) {
+          if (status === 'checked_in') {
+            // Get current item to check if status is changing from pending_checkin
+            const currentItem = await db.collection('workItems').findOne({ id: id })
+            if (currentItem && currentItem.status !== 'checked_in') {
+              update.checkedInAt = new Date().toISOString()
+            }
+          } else if (status === 'wrapping' && !updates.wrappingStartedAt) {
             update.wrappingStartedAt = new Date().toISOString()
           } else if (status === 'quality_check' && !updates.wrappingCompletedAt) {
             update.wrappingCompletedAt = new Date().toISOString()
@@ -2303,134 +2557,111 @@ export const resolvers = {
           console.log(`✅ Updating qualityCheckProgress for item ${id}:`, updates.qualityCheckProgress)
         }
         
-        await db.collection('bookingItems').updateOne(
+        await db.collection('workItems').updateOne(
           { id: id },
           { $set: update }
         )
         
-        const updated = await db.collection('bookingItems').findOne({ id: id })
+        const updated = await db.collection('workItems').findOne({ id: id })
         if (!updated) {
-          throw new Error('Item not found after update')
+          throw new Error('Work item not found after update')
         }
         
-        // Always check if booking status needs to be updated based on item statuses
-        // This ensures booking status updates even when status wasn't explicitly provided
-        if (updated.bookingId) {
-          // Get all items for this booking
-          const allItems = await db.collection('bookingItems')
-            .find({ bookingId: updated.bookingId })
+        // Check if work order status needs to be updated based on item statuses
+        if (updated.workOrderId) {
+          // Get all items for this work order
+          const allItems = await db.collection('workItems')
+            .find({ workOrderId: updated.workOrderId })
             .toArray()
-          
-          // Map legacy statuses to valid statuses
-          const mapItemStatus = (itemStatus: string) => {
-            const statusMap: Record<string, string> = {
-              'started': 'wrapping',
-              'assigned': 'checked_in',
-              'staging': 'wrapping',
-              'cutting': 'wrapping',
-              'ribbon': 'quality_check',
-              'tag': 'quality_check',
-              'complete': 'ready'
-            }
-            return statusMap[itemStatus] || itemStatus
-          }
-          
-          // Get the booking to check current status
-          const booking = await db.collection('bookings').findOne({ id: updated.bookingId })
-          if (!booking) {
-            return {
-              ...updated,
-              wrappingProgress: Array.isArray(updated.wrappingProgress) ? updated.wrappingProgress : [],
-              qualityCheckProgress: Array.isArray(updated.qualityCheckProgress) ? updated.qualityCheckProgress : []
-            }
-          }
           
           // Filter out items that haven't been checked in yet
           const checkedInItems = allItems.filter((item: any) => {
-            const normalizedStatus = mapItemStatus(item.status || 'pending_checkin')
-            return normalizedStatus !== 'pending_checkin'
+            return item.status !== 'pending_checkin'
           })
           
-          // Only check booking status if there are checked-in items
           if (checkedInItems.length > 0) {
             // Check if all checked-in items are ready
             const allItemsReady = checkedInItems.every((item: any) => {
-              const normalizedStatus = mapItemStatus(item.status || 'pending_checkin')
-              return normalizedStatus === 'ready' || normalizedStatus === 'picked_up'
+              return item.status === 'ready' || item.status === 'picked_up'
             })
             
             // Check if any items are in progress (not pending, not ready, not picked up)
             const hasInProgressItems = checkedInItems.some((item: any) => {
-              const normalizedStatus = mapItemStatus(item.status || 'pending_checkin')
-              return normalizedStatus !== 'pending_checkin' && 
-                     normalizedStatus !== 'ready' && 
-                     normalizedStatus !== 'picked_up'
+              return item.status !== 'pending_checkin' && 
+                     item.status !== 'ready' && 
+                     item.status !== 'picked_up'
             })
             
-            // Update booking status based on item statuses
-            if (allItemsReady) {
-              // All checked-in items are ready - ALWAYS update booking to 'ready'
-              // This overrides any other status (delivered, picked_up, etc.) because items are ready for pickup
-              // IMPORTANT: When all items are ready, booking MUST be 'ready', not 'delivered' or 'picked_up'
-              if (booking.status !== 'ready') {
-                console.log(`🔄 Auto-updating booking ${updated.bookingId} status from '${booking.status}' to 'ready' (all ${checkedInItems.length} items are ready)`)
-                await db.collection('bookings').updateOne(
-                  { id: updated.bookingId },
-                  { 
-                    $set: { 
-                      status: 'ready',
-                      updatedAt: new Date().toISOString()
-                    } 
-                  }
+            const workOrder = await db.collection('workOrders').findOne({ id: updated.workOrderId })
+            if (workOrder) {
+              if (allItemsReady && workOrder.status !== 'ready') {
+                await db.collection('workOrders').updateOne(
+                  { id: updated.workOrderId },
+                  { $set: { status: 'ready', updatedAt: new Date().toISOString() } }
                 )
-                // Verify the update
-                const verifyBooking = await db.collection('bookings').findOne({ id: updated.bookingId })
-                if (verifyBooking && verifyBooking.status === 'ready') {
-                  console.log(`✅ Booking ${updated.bookingId} status confirmed as 'ready'`)
-                  
-                  // Only send ready for pickup email when status is CHANGING to ready (not already ready)
-                  // This prevents duplicate emails if admin moves order back to WIP and then back to ready
-                  // We already checked `if (booking.status !== 'ready')` above, so we know it's a transition
-                  console.log(`📧 Sending ready for pickup email for booking ${updated.bookingId} (status changing from '${booking.status}' to 'ready')`)
-                  sendReadyForPickupEmail({
-                    name: verifyBooking.name || booking.name,
-                    email: verifyBooking.email || booking.email,
-                    date: verifyBooking.date || booking.date,
-                    time: verifyBooking.time || booking.time,
-                    id: verifyBooking.id || booking.id,
-                    address: verifyBooking.address || booking.address,
-                  }).then(() => {
-                    // Mark email as sent
-                    db.collection('bookings').updateOne(
-                      { id: updated.bookingId },
-                      { $set: { readyEmailSentAt: new Date().toISOString() } }
-                    ).catch(err => console.error('Failed to update readyEmailSentAt:', err))
-                  }).catch((error) => {
-                    console.error('Failed to send ready for pickup email:', error)
+              } else if (hasInProgressItems && workOrder.status === 'ready') {
+                await db.collection('workOrders').updateOne(
+                  { id: updated.workOrderId },
+                  { $set: { status: 'in_progress', updatedAt: new Date().toISOString() } }
+                )
+              }
+              
+              // Check booking status
+              const booking = await db.collection('bookings').findOne({ id: workOrder.bookingId })
+              if (booking) {
+                const allWorkOrders = await db.collection('workOrders')
+                  .find({ bookingId: booking.id })
+                  .toArray()
+                
+                const allWorkOrderItems = await db.collection('workItems')
+                  .find({ workOrderId: { $in: allWorkOrders.map(wo => wo.id) } })
+                  .toArray()
+                
+                const allCheckedInItems = allWorkOrderItems.filter((item: any) => {
+                  return item.status !== 'pending_checkin'
+                })
+                
+                if (allCheckedInItems.length > 0) {
+                  const allBookingItemsReady = allCheckedInItems.every((item: any) => {
+                    return item.status === 'ready' || item.status === 'picked_up'
                   })
-                } else {
-                  console.error(`❌ ERROR: Booking ${updated.bookingId} status update failed! Current status: ${verifyBooking?.status}`)
-                }
-              } else {
-                console.log(`✓ Booking ${updated.bookingId} already has status 'ready' (all ${checkedInItems.length} items are ready)`)
-              }
-            } else if (hasInProgressItems) {
-              // Some items are still in progress - ensure booking is in_progress
-              if (booking.status === 'ready') {
-                await db.collection('bookings').updateOne(
-                  { id: updated.bookingId },
-                  { 
-                    $set: { 
-                      status: 'in_progress',
-                      updatedAt: new Date().toISOString()
-                    } 
+                  
+                  if (allBookingItemsReady && booking.status !== 'ready') {
+                    console.log(`🔄 Auto-updating booking ${booking.id} status from '${booking.status}' to 'ready' (all ${allCheckedInItems.length} items are ready)`)
+                    await db.collection('bookings').updateOne(
+                      { id: booking.id },
+                      { $set: { status: 'ready', updatedAt: new Date().toISOString() } }
+                    )
+                    // Verify the update
+                    const verifyBooking = await db.collection('bookings').findOne({ id: booking.id })
+                    if (verifyBooking && verifyBooking.status === 'ready') {
+                      console.log(`✅ Booking ${booking.id} status confirmed as 'ready'`)
+                      console.log(`📧 Sending ready for pickup email for booking ${booking.id}`)
+                      sendReadyForPickupEmail({
+                        name: verifyBooking.name || booking.name,
+                        email: verifyBooking.email || booking.email,
+                        date: verifyBooking.date || booking.date,
+                        time: verifyBooking.time || booking.time,
+                        id: verifyBooking.id || booking.id,
+                        address: verifyBooking.address || booking.address,
+                      }).then(() => {
+                        db.collection('bookings').updateOne(
+                          { id: booking.id },
+                          { $set: { readyEmailSentAt: new Date().toISOString() } }
+                        ).catch(err => console.error('Failed to update readyEmailSentAt:', err))
+                      }).catch((error) => {
+                        console.error('Failed to send ready for pickup email:', error)
+                      })
+                    }
+                  } else if (!allBookingItemsReady && booking.status === 'ready') {
+                    await db.collection('bookings').updateOne(
+                      { id: booking.id },
+                      { $set: { status: 'in_progress', updatedAt: new Date().toISOString() } }
+                    )
+                    console.log(`🔄 Booking ${booking.id} status reverted to 'in_progress' - items are no longer all ready`)
                   }
-                )
-                console.log(`🔄 Booking ${updated.bookingId} status reverted to 'in_progress' - items are no longer all ready`)
+                }
               }
-              // Don't automatically move from pending to in_progress when items are checked in
-              // Keep booking as pending so it shows in unassigned column
-              // Status will change to in_progress when items are actually assigned/started
             }
           }
         }
@@ -2442,17 +2673,17 @@ export const resolvers = {
           qualityCheckProgress: Array.isArray(updated.qualityCheckProgress) ? updated.qualityCheckProgress : []
         }
       } catch (error: any) {
-        console.error('Error in updateBookingItem resolver:', error)
-        throw new Error(`Failed to update booking item: ${error.message}`)
+        console.error('Error in updateWorkItem resolver:', error)
+        throw new Error(`Failed to update work item: ${error.message}`)
       }
     },
     assignWorker: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
-        const { itemId, workerId } = args.input
+        const { workItemId, workerId } = args.input
         
-        await db.collection('bookingItems').updateOne(
-          { id: itemId },
+        await db.collection('workItems').updateOne(
+          { id: workItemId },
           { 
             $set: {
               assignedWorker: workerId,
@@ -2461,9 +2692,9 @@ export const resolvers = {
           }
         )
         
-        const updated = await db.collection('bookingItems').findOne({ id: itemId })
+        const updated = await db.collection('workItems').findOne({ id: workItemId })
         if (!updated) {
-          throw new Error('Item not found')
+          throw new Error('Work item not found')
         }
         // Normalize wrappingProgress and qualityCheckProgress before returning
         return {
@@ -2479,10 +2710,10 @@ export const resolvers = {
     recordMaterialsUsed: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
-        const { itemId, materialsUsed } = args.input
+        const { workItemId, materialsUsed } = args.input
         
-        await db.collection('bookingItems').updateOne(
-          { id: itemId },
+        await db.collection('workItems').updateOne(
+          { id: workItemId },
           { 
             $set: {
               materialsUsed: materialsUsed,
@@ -2491,9 +2722,9 @@ export const resolvers = {
           }
         )
         
-        const updated = await db.collection('bookingItems').findOne({ id: itemId })
+        const updated = await db.collection('workItems').findOne({ id: workItemId })
         if (!updated) {
-          throw new Error('Item not found')
+          throw new Error('Work item not found')
         }
         // Normalize wrappingProgress and qualityCheckProgress before returning
         return {

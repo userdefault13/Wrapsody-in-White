@@ -212,26 +212,94 @@ export async function initializeCollections() {
     await transactionsCollection.createIndex({ userId: 1 })
 
     // ============================================
-    // BOOKING ITEMS COLLECTION
+    // SIZES COLLECTION
     // ============================================
-    const bookingItemsCollection = db.collection('bookingItems')
+    const sizesCollection = db.collection('sizes')
     
-    // Create indexes for booking items
-    await bookingItemsCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
-    await bookingItemsCollection.createIndex({ bookingId: 1 })
-    await bookingItemsCollection.createIndex({ status: 1 })
-    await bookingItemsCollection.createIndex({ assignedWorker: 1 })
-    await bookingItemsCollection.createIndex({ createdAt: -1 })
-    await bookingItemsCollection.createIndex({ bookingId: 1, itemNumber: 1 }) // Compound index
+    // Create indexes for sizes
+    await sizesCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await sizesCollection.createIndex({ name: 1 }, { unique: true })
+    await sizesCollection.createIndex({ order: 1 })
+    await sizesCollection.createIndex({ active: 1 })
+    await sizesCollection.createIndex({ createdAt: -1 })
     
-    results.bookingItems = {
+    // Seed default sizes if collection is empty
+    const existingSizes = await sizesCollection.countDocuments()
+    if (existingSizes === 0) {
+      const defaultSizes = [
+        { id: 'size-xsmall', name: 'xsmall', displayName: 'Extra Small', order: 1, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'size-small', name: 'small', displayName: 'Small', order: 2, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'size-medium', name: 'medium', displayName: 'Medium', order: 3, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'size-large', name: 'large', displayName: 'Large', order: 4, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'size-xl', name: 'xl', displayName: 'Extra Large', order: 5, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      ]
+      await sizesCollection.insertMany(defaultSizes)
+      console.log('✅ Seeded default sizes')
+    }
+    
+    results.sizes = {
+      indexes: [
+        'id (unique)',
+        'name (unique)',
+        'order',
+        'active',
+        'createdAt (descending)'
+      ]
+    }
+
+    // ============================================
+    // WORK ORDERS COLLECTION
+    // ============================================
+    const workOrdersCollection = db.collection('workOrders')
+    
+    // Create indexes for work orders
+    await workOrdersCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await workOrdersCollection.createIndex({ bookingId: 1 })
+    await workOrdersCollection.createIndex({ status: 1 })
+    await workOrdersCollection.createIndex({ assignedWorker: 1 })
+    await workOrdersCollection.createIndex({ workOrderNumber: 1 })
+    await workOrdersCollection.createIndex({ priority: 1 })
+    await workOrdersCollection.createIndex({ createdAt: -1 })
+    await workOrdersCollection.createIndex({ bookingId: 1, workOrderNumber: 1 }, { unique: true })
+    await workOrdersCollection.createIndex({ status: 1, assignedWorker: 1 })
+    
+    results.workOrders = {
       indexes: [
         'id (unique)',
         'bookingId',
         'status',
         'assignedWorker',
+        'workOrderNumber',
+        'priority',
         'createdAt (descending)',
-        'bookingId + itemNumber (compound)'
+        'bookingId + workOrderNumber (unique compound)',
+        'status + assignedWorker (compound)'
+      ]
+    }
+
+    // ============================================
+    // WORK ITEMS COLLECTION
+    // ============================================
+    const workItemsCollection = db.collection('workItems')
+    
+    // Create indexes for work items
+    await workItemsCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await workItemsCollection.createIndex({ workOrderId: 1 })
+    await workItemsCollection.createIndex({ sizeId: 1 })
+    await workItemsCollection.createIndex({ status: 1 })
+    await workItemsCollection.createIndex({ assignedWorker: 1 })
+    await workItemsCollection.createIndex({ createdAt: -1 })
+    await workItemsCollection.createIndex({ workOrderId: 1, itemNumber: 1 }, { unique: true })
+    
+    results.workItems = {
+      indexes: [
+        'id (unique)',
+        'workOrderId',
+        'sizeId',
+        'status',
+        'assignedWorker',
+        'createdAt (descending)',
+        'workOrderId + itemNumber (unique compound)'
       ]
     }
 
@@ -263,7 +331,7 @@ export async function getCollectionStats() {
   const stats: Record<string, any> = {}
 
   try {
-    const collections = ['bookings', 'availability', 'transactions', 'users', 'pricing', 'services', 'inventory', 'workers']
+    const collections = ['bookings', 'availability', 'transactions', 'users', 'pricing', 'services', 'inventory', 'workers', 'sizes', 'workOrders', 'workItems']
     
     for (const collectionName of collections) {
       const collection = db.collection(collectionName)

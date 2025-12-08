@@ -563,8 +563,8 @@ const handleStartWrapping = async () => {
 
     // Update item status to wrapping (this will set wrappingStartedAt automatically)
     const mutation = `
-      mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-        updateBookingItem(input: $input) {
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
           status
           assignedWorker
@@ -616,8 +616,8 @@ const handleMoveBackToQualityCheck = async () => {
   movingBack.value = true
   try {
     const mutation = `
-      mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-        updateBookingItem(input: $input) {
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
           status
         }

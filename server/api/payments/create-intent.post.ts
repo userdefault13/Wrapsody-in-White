@@ -17,19 +17,22 @@ export default defineEventHandler(async (event) => {
 
     const body = await readBody(event)
     
-    if (!body.amount || !body.currency || !body.bookingId) {
+    if (!body.amount || !body.currency) {
       throw createError({
         statusCode: 400,
-        message: 'Missing required fields'
+        message: 'Missing required fields: amount and currency are required'
       })
     }
+    
+    // bookingId is optional - booking may be created after payment
+    const bookingId = body.bookingId || 'pending'
 
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: body.amount, // Amount in cents
       currency: body.currency.toLowerCase(),
       metadata: {
-        bookingId: body.bookingId
+        bookingId: bookingId
       },
       automatic_payment_methods: {
         enabled: true,

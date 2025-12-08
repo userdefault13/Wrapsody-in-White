@@ -263,6 +263,8 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { loadStripe } from '@stripe/stripe-js'
 import { ethers } from 'ethers'
+import { useBookings } from '~/composables/useBookings'
+import { useGraphQL } from '~/composables/useGraphQL'
 
 const props = defineProps({
   isOpen: {
@@ -271,7 +273,15 @@ const props = defineProps({
   },
   booking: {
     type: Object,
-    required: true
+    required: false // Now optional - can be bookingData instead
+  },
+  bookingData: {
+    type: Object,
+    required: false // New prop for booking data before creation
+  },
+  itemCounts: {
+    type: Object,
+    required: false // Item counts for work order creation
   },
   total: {
     type: Number,
@@ -321,13 +331,19 @@ const finalTotal = computed(() => {
 
 const bookingPricing = ref(null)
 
+// Get booking or bookingData
+const currentBooking = computed(() => {
+  return props.booking || props.bookingData
+})
+
 // Fetch the pricing item to get serviceCategory
 const fetchBookingPricing = async () => {
+  if (!currentBooking.value?.service) return
   try {
     const { executeQuery } = useGraphQL()
     const query = `
       query {
-        pricingItem(id: "${props.booking.service}") {
+        pricingItem(id: "${currentBooking.value.service}") {
           id
           name
           price
@@ -346,6 +362,17 @@ const fetchBookingPricing = async () => {
 }
 
 const bookingSummary = computed(() => {
+  if (!currentBooking.value) {
+    return {
+      service: '',
+      numberOfGifts: 0,
+      date: '',
+      time: '',
+      total: 0,
+      deliveryFee: 0
+    }
+  }
+  
   // Try to get service name from pricing item, fallback to old format
   let service = ''
   let baseTotal = 0
@@ -359,17 +386,17 @@ const bookingSummary = computed(() => {
     if (bookingPricing.value.priceType === 'per-hour') {
       baseTotal = bookingPricing.value.price
     } else {
-      baseTotal = bookingPricing.value.price * props.booking.numberOfGifts
+      baseTotal = bookingPricing.value.price * (currentBooking.value.numberOfGifts || 0)
     }
   } else {
     // Fallback to old format
-    service = props.booking.service === 'basic' ? 'Basic ($8 per gift)' :
-               props.booking.service === 'premium' ? 'Premium ($12 per gift)' :
+    service = currentBooking.value.service === 'basic' ? 'Basic ($8 per gift)' :
+               currentBooking.value.service === 'premium' ? 'Premium ($12 per gift)' :
                'Unlimited ($50/hour)'
     
-    baseTotal = props.booking.service === 'unlimited' ? 50 :
-                 props.booking.service === 'basic' ? 8 * props.booking.numberOfGifts :
-                 12 * props.booking.numberOfGifts
+    baseTotal = currentBooking.value.service === 'unlimited' ? 50 :
+                 currentBooking.value.service === 'basic' ? 8 * (currentBooking.value.numberOfGifts || 0) :
+                 12 * (currentBooking.value.numberOfGifts || 0)
   }
   
   // Only add delivery fee if serviceCategory is "delivery" and total is less than $50
@@ -377,9 +404,9 @@ const bookingSummary = computed(() => {
   
   return {
     service,
-    numberOfGifts: props.booking.numberOfGifts,
-    date: formatDate(props.booking.date),
-    time: formatTime(props.booking.time),
+    numberOfGifts: currentBooking.value.numberOfGifts || 0,
+    date: formatDate(currentBooking.value.date),
+    time: formatTime(currentBooking.value.time),
     deliveryFee,
     total: props.total
   }
@@ -391,6 +418,9 @@ const canSubmit = computed(() => {
   }
   if (paymentMethod.value === 'card') {
     return cardElement.value !== null && stripe.value !== null
+  }
+  if (paymentMethod.value === 'cash') {
+    return true // Cash payment can always be submitted
   }
   return false
 })
@@ -426,8 +456,8 @@ onMounted(() => {
 })
 
 // Watch for booking changes
-watch(() => props.booking, () => {
-  if (props.booking?.service) {
+watch(() => currentBooking.value, () => {
+  if (currentBooking.value?.service) {
     fetchBookingPricing()
   }
 }, { immediate: true })
@@ -538,6 +568,8 @@ const mountCardElement = async () => {
                 iconColor: '#fa755a',
               },
             },
+            // Don't require billing details - we'll use the address from booking
+            hidePostalCode: false,
           })
           
           cardElement.value.mount('#card-element')
@@ -550,9 +582,19 @@ const mountCardElement = async () => {
                 displayError.textContent = event.error.message
                 displayError.style.display = 'block'
               } else {
+                // Clear error when card is valid
                 displayError.textContent = ''
                 displayError.style.display = 'none'
               }
+            }
+          })
+          
+          // Also listen for ready event to clear any initial errors
+          cardElement.value.on('ready', () => {
+            const displayError = document.getElementById('card-errors')
+            if (displayError) {
+              displayError.textContent = ''
+              displayError.style.display = 'none'
             }
           })
           
@@ -782,15 +824,31 @@ const handlePayment = async () => {
         throw new Error('Stripe not initialized. Please check your configuration.')
       }
 
+      // Clear any previous errors
+      const displayError = document.getElementById('card-errors')
+      if (displayError) {
+        displayError.textContent = ''
+        displayError.style.display = 'none'
+      }
+
       // Get client secret
       const clientSecret = await createPaymentIntent()
       
-      // Stripe payment
+      // Stripe payment - provide billing details from booking if available
+      const billingDetails = currentBooking.value ? {
+        name: currentBooking.value.name || '',
+        email: currentBooking.value.email || '',
+        address: {
+          line1: currentBooking.value.address || '',
+        }
+      } : {}
+      
       const { error: stripeError, paymentIntent } = await stripe.value.confirmCardPayment(
         clientSecret,
         {
           payment_method: {
             card: cardElement.value,
+            billing_details: billingDetails
           }
         }
       )
@@ -799,9 +857,25 @@ const handlePayment = async () => {
         throw new Error(stripeError.message)
       }
 
-      // Create transaction record
+      // Payment successful! Now create the booking
+      console.log('Payment successful, creating booking...')
+      const { createBooking } = useBookings()
+      
+      let createdBooking
+      if (props.booking?.id) {
+        // Booking already exists (legacy flow)
+        createdBooking = props.booking
+      } else if (props.bookingData) {
+        // Create booking after payment
+        createdBooking = await createBooking(props.bookingData)
+        console.log('Booking created after payment:', createdBooking.id)
+      } else {
+        throw new Error('No booking data available to create booking')
+      }
+
+      // Create transaction record with the booking ID
       console.log('Creating Stripe transaction:', {
-        bookingId: props.booking.id,
+        bookingId: createdBooking.id,
         amount: Math.round(finalTotal.value * 100),
         paymentIntentId: paymentIntent.id
       })
@@ -809,10 +883,10 @@ const handlePayment = async () => {
       const response = await $fetch('/api/payments', {
         method: 'POST',
         body: {
-          bookingId: props.booking.id,
+          bookingId: createdBooking.id,
           amount: Math.round(finalTotal.value * 100),
           currency: 'USD',
-          paymentMethod: 'card', // Use 'card' instead of 'stripe' for consistency
+          paymentMethod: 'card',
           status: 'completed',
           paymentIntentId: paymentIntent.id,
           metadata: {
@@ -829,7 +903,8 @@ const handlePayment = async () => {
         emit('payment-complete', {
           transaction: response.data,
           paymentMethod: 'stripe',
-          bookingId: props.booking.id
+          bookingId: createdBooking.id,
+          booking: createdBooking
         })
         // Parent will close modal and navigate
       }
@@ -855,9 +930,25 @@ const handlePayment = async () => {
         }
       }
       
+      // Payment successful! Now create the booking
+      console.log('Crypto payment successful, creating booking...')
+      const { createBooking } = useBookings()
+      
+      let createdBooking
+      if (props.booking?.id) {
+        // Booking already exists (legacy flow)
+        createdBooking = props.booking
+      } else if (props.bookingData) {
+        // Create booking after payment
+        createdBooking = await createBooking(props.bookingData)
+        console.log('Booking created after payment:', createdBooking.id)
+      } else {
+        throw new Error('No booking data available to create booking')
+      }
+
       // Record transaction in database
       console.log('Creating USDC transaction:', {
-        bookingId: props.booking.id,
+        bookingId: createdBooking.id,
         amount: finalTotal.value,
         transactionHash: txResult.transactionHash
       })
@@ -865,7 +956,7 @@ const handlePayment = async () => {
       const response = await $fetch('/api/payments/crypto', {
         method: 'POST',
         body: {
-          bookingId: props.booking.id,
+          bookingId: createdBooking.id,
           amount: finalTotal.value,
           currency: 'USD',
           cryptoAmount: cryptoAmount.value,
@@ -886,8 +977,59 @@ const handlePayment = async () => {
         emit('payment-complete', {
           transaction: response.data,
           paymentMethod: paymentMethod.value,
-          bookingId: props.booking.id,
+          bookingId: createdBooking.id,
+          booking: createdBooking,
           transactionHash: txResult.transactionHash
+        })
+        // Parent will close modal and navigate
+      }
+    } else if (paymentMethod.value === 'cash') {
+      // Cash payment - create booking immediately (payment on delivery)
+      console.log('Cash payment selected, creating booking...')
+      const { createBooking } = useBookings()
+      
+      let createdBooking
+      if (props.booking?.id) {
+        // Booking already exists (legacy flow)
+        createdBooking = props.booking
+      } else if (props.bookingData) {
+        // Create booking for cash payment
+        createdBooking = await createBooking(props.bookingData)
+        console.log('Booking created for cash payment:', createdBooking.id)
+      } else {
+        throw new Error('No booking data available to create booking')
+      }
+
+      // Create transaction record with status 'pending' for cash
+      console.log('Creating cash transaction:', {
+        bookingId: createdBooking.id,
+        amount: Math.round(finalTotal.value * 100)
+      })
+      
+      const response = await $fetch('/api/payments', {
+        method: 'POST',
+        body: {
+          bookingId: createdBooking.id,
+          amount: Math.round(finalTotal.value * 100),
+          currency: 'USD',
+          paymentMethod: 'cash',
+          status: 'pending', // Cash payment is pending until delivery
+          metadata: {
+            discount: 0,
+            originalAmount: props.total
+          }
+        }
+      })
+      
+      console.log('Cash transaction response:', response)
+
+      if (response.success) {
+        // Emit payment complete event - parent will handle navigation and close modal
+        emit('payment-complete', {
+          transaction: response.data,
+          paymentMethod: 'cash',
+          bookingId: createdBooking.id,
+          booking: createdBooking
         })
         // Parent will close modal and navigate
       }
@@ -895,6 +1037,7 @@ const handlePayment = async () => {
   } catch (err) {
     console.error('Payment error:', err)
     error.value = err?.data?.message || err?.message || 'There was an error processing your payment. Please try again.'
+    // IMPORTANT: If payment fails, booking is NOT created - this is the correct behavior
   } finally {
     processing.value = false
   }
@@ -902,12 +1045,17 @@ const handlePayment = async () => {
 
 const createPaymentIntent = async () => {
   try {
+    // For payment intent, we need a booking ID
+    // If booking doesn't exist yet, use a temporary ID or create booking first
+    // Actually, let's use a temporary ID since we'll create the booking after payment
+    const tempBookingId = props.booking?.id || 'temp-' + Date.now()
+    
     const response = await $fetch('/api/payments/create-intent', {
       method: 'POST',
       body: {
         amount: Math.round(finalTotal.value * 100),
         currency: 'usd',
-        bookingId: props.booking.id
+        bookingId: tempBookingId // Use temp ID if booking doesn't exist yet
       }
     })
     if (!response || !response.clientSecret) {

@@ -531,8 +531,8 @@ const saveProgressToDB = async () => {
   saving.value = true
   try {
     const mutation = `
-      mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-        updateBookingItem(input: $input) {
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
           wrappingProgress
         }
@@ -583,8 +583,8 @@ const handleComplete = async () => {
   try {
     // Save progress and update status in a single mutation
     const mutation = `
-      mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-        updateBookingItem(input: $input) {
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
           wrappingProgress
           status

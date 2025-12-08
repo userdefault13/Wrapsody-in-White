@@ -318,7 +318,12 @@ const loadBookings = async () => {
             bookingId
             itemNumber
             description
-            size
+            sizeId
+            size {
+              id
+              name
+              displayName
+            }
             photos
             serialNumber
             serialNumberPhoto
@@ -361,8 +366,8 @@ const handleSearch = () => {
 const handleStatusUpdate = async (itemId, newStatus) => {
   try {
     const mutation = `
-      mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-        updateBookingItem(input: $input) {
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
           status
         }

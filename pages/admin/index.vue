@@ -727,29 +727,34 @@ const fetchData = async () => {
     }
     console.log('Transactions count:', transactions.value.length)
     
-    // Fetch ready items by getting all bookings and their items in parallel
+    // Fetch ready items by getting all bookings and their work orders/items in parallel
     console.log('Fetching ready items...')
-    const itemsQuery = `
-      query GetBookingItems($bookingId: ID!) {
-        bookingItems(bookingId: $bookingId) {
+    const workOrdersQuery = `
+      query GetWorkOrders($bookingId: ID!) {
+        workOrders(bookingId: $bookingId) {
           id
           bookingId
-          status
+          items {
+            id
+            status
+          }
         }
       }
     `
     
-    // Fetch items for all bookings in parallel
+    // Fetch work orders for all bookings in parallel
     const itemsPromises = bookings.value.map(booking => 
-      executeQuery(itemsQuery, { bookingId: booking.id })
-        .then(itemsData => {
-          if (itemsData && itemsData.bookingItems) {
-            return itemsData.bookingItems.filter(item => item.status === 'ready')
+      executeQuery(workOrdersQuery, { bookingId: booking.id })
+        .then(workOrdersData => {
+          if (workOrdersData && workOrdersData.workOrders) {
+            // Flatten all items from all work orders
+            const allItems = workOrdersData.workOrders.flatMap(wo => wo.items || [])
+            return allItems.filter(item => item.status === 'ready')
           }
           return []
         })
         .catch(error => {
-          console.error(`Error fetching items for booking ${booking.id}:`, error)
+          console.error(`Error fetching work orders for booking ${booking.id}:`, error)
           return []
         })
     )

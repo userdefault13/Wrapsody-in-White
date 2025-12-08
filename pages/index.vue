@@ -265,6 +265,8 @@
       v-if="pendingPayment"
       :is-open="isPaymentModalOpen"
       :booking="pendingPayment.booking"
+      :booking-data="pendingPayment.bookingData"
+      :item-counts="pendingPayment.itemCounts"
       :total="pendingPayment.total"
       @close="closePaymentModal"
       @payment-complete="handlePaymentComplete"
@@ -508,16 +510,19 @@ const closeLookupModal = () => {
 const router = useRouter()
 
 const handleBookingCreated = (data) => {
-  console.log('Booking created, opening payment modal:', data)
+  console.log('Booking data prepared, opening payment modal:', data)
   
-  if (!data || !data.booking || !data.booking.id) {
+  if (!data || (!data.booking && !data.bookingData)) {
     console.error('Invalid booking data:', data)
     return
   }
   
-  // Store booking and total for payment modal
+  // Store booking data and total for payment modal
+  // bookingData will be used to create booking AFTER payment succeeds
   pendingPayment.value = {
-    booking: data.booking,
+    booking: data.booking || null, // Legacy support
+    bookingData: data.bookingData || null, // New: booking data to create after payment
+    itemCounts: data.itemCounts || null, // Item counts for work order creation
     total: data.total
   }
   
@@ -533,11 +538,12 @@ const closePaymentModal = () => {
 const handlePaymentComplete = async (paymentData) => {
   console.log('Payment completed:', paymentData)
   
-  // Get booking ID from payment data or pending payment
-  const bookingId = paymentData.bookingId || pendingPayment.value?.booking?.id
+  // Get booking ID from payment data (booking should now be created after payment)
+  const bookingId = paymentData.bookingId || paymentData.booking?.id || pendingPayment.value?.booking?.id
   
   if (!bookingId) {
     console.error('No booking ID found for confirmation')
+    alert('Payment completed but booking ID not found. Please contact support.')
     return
   }
   

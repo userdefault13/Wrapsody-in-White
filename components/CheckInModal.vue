@@ -184,7 +184,7 @@
                             type="button"
                             class="px-4 py-2 text-sm font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                           >
-                            Wrong Size
+                            Change
                           </button>
                           <button
                             v-else
@@ -302,6 +302,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useGraphQL } from '~/composables/useGraphQL'
+import { useAuth } from '~/composables/useAuth'
 import SerialNumberScanner from './SerialNumberScanner.vue'
 
 const props = defineProps({
@@ -318,6 +319,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'checked-in', 'payment-adjustment'])
 
 const { executeQuery } = useGraphQL()
+const { walletAddress } = useAuth()
 const saving = ref(false)
 const searchQuery = ref('')
 const searchResults = ref([])
@@ -490,6 +492,7 @@ const addItem = (defaultSize = '') => {
   items.value.push({
     description: '',
     size: defaultSize,
+    sizeId: null, // Will be set based on size string
     photos: [],
     serialNumber: '',
     serialNumberPhoto: '',
@@ -611,12 +614,77 @@ const handleCheckIn = async () => {
       return
     }
 
-    // First, add all items
+    // First, check in the booking (this creates a work order)
+    const checkInMutation = `
+      mutation CheckInBooking($input: CheckInBookingInput!) {
+        checkInBooking(input: $input) {
+          id
+          currentStage
+          checkedInAt
+          workOrders {
+            id
+            workOrderNumber
+          }
+        }
+      }
+    `
+    
+    const checkInResult = await executeQuery(checkInMutation, {
+      input: {
+        bookingId: selectedBooking.value.id,
+        checkedInBy: walletAddress.value || 'unknown'
+      }
+    })
+    
+    // Get the work order ID from the check-in result
+    const workOrderId = checkInResult.checkInBooking.workOrders?.[0]?.id
+    if (!workOrderId) {
+      throw new Error('Failed to create work order during check-in')
+    }
+
+    // Check if items already exist in the work order
+    const checkItemsQuery = `
+      query GetWorkItems($workOrderId: ID!) {
+        workOrder(id: $workOrderId) {
+          id
+          items {
+            id
+            itemNumber
+          }
+        }
+      }
+    `
+    
+    let existingItems = []
+    try {
+      const existingItemsResult = await executeQuery(checkItemsQuery, {
+        workOrderId: workOrderId
+      })
+      existingItems = existingItemsResult.workOrder?.items || []
+    } catch (error) {
+      console.warn('Could not check for existing items:', error)
+    }
+    
+    // Get the highest item number to continue from
+    const maxItemNumber = existingItems.length > 0 
+      ? Math.max(...existingItems.map(item => item.itemNumber || 0))
+      : 0
+    
+    // Then, add all items to the work order (starting from the next item number)
     for (let i = 0; i < items.value.length; i++) {
       const item = items.value[i]
+      const itemNumber = maxItemNumber + i + 1
+      
+      // Check if this item number already exists
+      const itemExists = existingItems.some(existing => existing.itemNumber === itemNumber)
+      if (itemExists) {
+        console.warn(`Item number ${itemNumber} already exists, skipping`)
+        continue
+      }
+      
       const addItemMutation = `
-        mutation AddBookingItem($input: AddBookingItemInput!) {
-          addBookingItem(input: $input) {
+        mutation AddWorkItem($input: AddWorkItemInput!) {
+          addWorkItem(input: $input) {
             id
             itemNumber
             description
@@ -625,12 +693,25 @@ const handleCheckIn = async () => {
         }
       `
       
+      // Map size string to sizeId (temporary - should load sizes from GraphQL)
+      let sizeId = null
+      if (item.size) {
+        const sizeMap = {
+          'XSmall': 'size-xsmall',
+          'Small': 'size-small',
+          'Medium': 'size-medium',
+          'Large': 'size-large',
+          'XLarge': 'size-xl'
+        }
+        sizeId = sizeMap[item.size] || null
+      }
+      
       await executeQuery(addItemMutation, {
         input: {
-          bookingId: selectedBooking.value.id,
-          itemNumber: i + 1,
+          workOrderId: workOrderId,
+          itemNumber: itemNumber,
           description: item.description,
-          size: item.size,
+          sizeId: sizeId,
           photos: item.photos,
           serialNumber: item.serialNumber || null,
           serialNumberPhoto: item.serialNumberPhoto || null,
@@ -643,23 +724,53 @@ const handleCheckIn = async () => {
       })
     }
 
-    // Then, check in the booking (this will validate item count and set status to in_progress)
-    const checkInMutation = `
-      mutation CheckInBooking($input: CheckInBookingInput!) {
-        checkInBooking(input: $input) {
+    // Update all items in the work order to checked_in status
+    const updateItemsToCheckedIn = `
+      mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+        updateWorkItem(input: $input) {
           id
-          currentStage
+          status
           checkedInAt
         }
       }
     `
-    
-    await executeQuery(checkInMutation, {
-      input: {
-        bookingId: selectedBooking.value.id,
-        checkedInBy: 'current-worker-id' // TODO: Get from auth
+
+    // Get all items in the work order that need to be updated
+    const allWorkItemsQuery = `
+      query GetWorkItems($workOrderId: ID!) {
+        workOrder(id: $workOrderId) {
+          items {
+            id
+            status
+          }
+        }
       }
+    `
+
+    const allWorkItemsResult = await executeQuery(allWorkItemsQuery, {
+      workOrderId: workOrderId
     })
+
+    // Update all items that are still pending_checkin to checked_in
+    if (allWorkItemsResult.workOrder?.items) {
+      const itemsToUpdate = allWorkItemsResult.workOrder.items.filter(
+        item => item.status === 'pending_checkin'
+      )
+      
+      if (itemsToUpdate.length > 0) {
+        const updatePromises = itemsToUpdate.map(item => {
+          return executeQuery(updateItemsToCheckedIn, {
+            input: {
+              id: item.id,
+              status: 'checked_in'
+            }
+          })
+        })
+        
+        await Promise.all(updatePromises)
+        console.log(`✅ Updated ${itemsToUpdate.length} items to checked_in status`)
+      }
+    }
 
     // Calculate price adjustments for size discrepancies
     const priceAdjustment = await calculatePriceAdjustment()

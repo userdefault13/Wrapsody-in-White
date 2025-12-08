@@ -31,24 +31,127 @@
             <!-- Content -->
             <div class="p-6">
               <form @submit.prevent="handleSubmit" class="space-y-6">
-                <!-- Service Selection -->
-                <div>
-                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Service Type *
+                <!-- Service Type Selection (First Step) -->
+                <div v-if="!selectedServiceType">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                    Choose Service Type *
                   </label>
                   <div class="grid md:grid-cols-3 gap-4">
-                    <ServiceOption
-                      v-for="service in services"
-                      :key="service.id"
-                      :service="service"
-                      :selected="form.service === service.id"
-                      @select="form.service = service.id"
-                    />
+                    <button
+                      type="button"
+                      @click="selectedServiceType = 'dropoff'"
+                      class="p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-all text-left bg-white dark:bg-gray-700"
+                    >
+                      <div class="flex items-center gap-3 mb-2">
+                        <span class="text-3xl">📦</span>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Drop-Off</h3>
+                      </div>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Bring your items to us and we'll wrap them for pickup
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      @click="selectedServiceType = 'delivery'"
+                      class="p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-all text-left bg-white dark:bg-gray-700"
+                    >
+                      <div class="flex items-center gap-3 mb-2">
+                        <span class="text-3xl">🚗</span>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Delivery</h3>
+                      </div>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">
+                        We pick up and deliver your wrapped gifts
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      @click="selectedServiceType = 'onsite'"
+                      class="p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-all text-left bg-white dark:bg-gray-700"
+                    >
+                      <div class="flex items-center gap-3 mb-2">
+                        <span class="text-3xl">📍</span>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">On-Site</h3>
+                      </div>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">
+                        We come to your location to wrap on-site
+                      </p>
+                    </button>
                   </div>
                 </div>
 
-                <!-- Date Selection -->
-                <div>
+                <!-- Size & Quantity Selection (Combined Step) -->
+                <div v-if="selectedServiceType">
+                  <div class="flex items-center gap-4 mb-4">
+                    <button
+                      type="button"
+                      @click="selectedServiceType = null; itemCounts = {}"
+                      class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      ← Back
+                    </button>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Select Sizes & Quantities *
+                    </label>
+                  </div>
+                  
+                  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                    <div
+                      v-for="pricing in filteredPricing"
+                      :key="pricing.id"
+                      :class="[
+                        'p-6 border-2 rounded-lg transition-all bg-white dark:bg-gray-700',
+                        (itemCounts[pricing.id] || 0) > 0
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700'
+                      ]"
+                    >
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">{{ pricing.name }}</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mb-3 min-h-[3rem]">{{ pricing.description }}</p>
+                      <p class="text-xl font-bold text-primary-600 dark:text-primary-400 mb-4">
+                        ${{ pricing.price }}{{ pricing.priceType === 'per-hour' ? '/hr' : '' }}
+                      </p>
+                      
+                      <!-- Quantity Counter -->
+                      <div class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Quantity:</span>
+                        <div class="flex items-center gap-2">
+                          <button
+                            type="button"
+                            @click="decrementItemCount(pricing.id)"
+                            :disabled="(itemCounts[pricing.id] || 0) <= 0"
+                            class="w-8 h-8 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-bold"
+                          >
+                            −
+                          </button>
+                          <span class="text-lg font-bold text-gray-900 dark:text-white w-10 text-center">
+                            {{ itemCounts[pricing.id] || 0 }}
+                          </span>
+                          <button
+                            type="button"
+                            @click="incrementItemCount(pricing.id)"
+                            class="w-8 h-8 rounded-lg border-2 border-primary-500 dark:border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/30 flex items-center justify-center font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Total Items Summary -->
+                  <div v-if="totalItemCount > 0" class="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg border-2 border-primary-500 dark:border-primary-400">
+                    <div class="flex justify-between items-center">
+                      <span class="font-semibold text-gray-900 dark:text-white">Total Items:</span>
+                      <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">{{ totalItemCount }}</span>
+                    </div>
+                  </div>
+                  <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic text-center">
+                    Select quantities for the sizes you need
+                  </p>
+                </div>
+
+                <!-- Date Selection (only show after items selected) -->
+                <div v-if="totalItemCount > 0">
                   <label for="date" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Select Date *
                   </label>
@@ -64,9 +167,6 @@
                   <p v-if="selectedDate" class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
                     {{ formatDate(selectedDate) }}
                   </p>
-                  <p v-if="selectedDate" class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
-                    {{ formatDate(selectedDate) }}
-                  </p>
                   <p v-if="selectedDate && checkingAvailability" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     Checking availability...
                   </p>
@@ -75,8 +175,8 @@
                   </p>
                 </div>
 
-                <!-- Time Selection -->
-                <div v-if="selectedDate && dateAvailable && !checkingAvailability">
+                <!-- Time Selection (only show after date selected) -->
+                <div v-if="totalItemCount > 0 && selectedDate && dateAvailable && !checkingAvailability">
                   <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Select Time *
                   </label>
@@ -104,27 +204,8 @@
                   </p>
                 </div>
 
-                <!-- Number of Gifts -->
-                <div>
-                  <label for="gifts" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Number of Gifts *
-                  </label>
-                  <input
-                    id="gifts"
-                    v-model.number="form.numberOfGifts"
-                    type="number"
-                    :min="1"
-                    :max="maxGifts"
-                    required
-                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <p v-if="maxGiftsReached" class="mt-2 text-sm text-amber-600 dark:text-amber-400 font-medium">
-                    Sorry, that's the max for the day at this time slot.
-                  </p>
-                </div>
-
-                <!-- Contact Information -->
-                <div class="grid md:grid-cols-2 gap-6">
+                <!-- Contact Information (only show after time selected) -->
+                <div v-if="totalItemCount > 0 && selectedTime" class="grid md:grid-cols-2 gap-6">
                   <div>
                     <label for="name" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Full Name *
@@ -182,8 +263,8 @@
                   </div>
                 </div>
 
-                <!-- Special Instructions -->
-                <div>
+                <!-- Special Instructions (only show after time selected) -->
+                <div v-if="totalItemCount > 0 && selectedTime">
                   <label for="message" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     Special Instructions or Requests
                   </label>
@@ -196,17 +277,25 @@
                   ></textarea>
                 </div>
 
-                <!-- Price Summary -->
-                <div v-if="form.service" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                <!-- Price Summary (only show after time selected) -->
+                <div v-if="totalItemCount > 0 && selectedTime" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
                   <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Booking Summary</h3>
                   <div class="space-y-2 text-sm">
                     <div class="flex justify-between">
-                      <span class="text-gray-600 dark:text-gray-300">Service:</span>
-                      <span class="font-semibold text-gray-900 dark:text-white">{{ getServiceName(form.service) }}</span>
+                      <span class="text-gray-600 dark:text-gray-300">Service Type:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white capitalize">{{ selectedServiceType }}</span>
+                    </div>
+                    <div v-for="(count, pricingId) in itemCounts" :key="pricingId" v-if="count > 0" class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-300">
+                        {{ pricing.find(p => p.id === pricingId)?.name || 'Item' }}:
+                      </span>
+                      <span class="font-semibold text-gray-900 dark:text-white">
+                        {{ count }} × ${{ pricing.find(p => p.id === pricingId)?.price || 0 }} = ${{ (count * (pricing.find(p => p.id === pricingId)?.price || 0)).toFixed(2) }}
+                      </span>
                     </div>
                     <div class="flex justify-between">
-                      <span class="text-gray-600 dark:text-gray-300">Number of Gifts:</span>
-                      <span class="font-semibold text-gray-900 dark:text-white">{{ form.numberOfGifts || 0 }}</span>
+                      <span class="text-gray-600 dark:text-gray-300">Total Items:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">{{ totalItemCount }}</span>
                     </div>
                     <div class="flex justify-between">
                       <span class="text-gray-600 dark:text-gray-300">Date & Time:</span>
@@ -305,6 +394,9 @@ const { createBooking, getAvailableTimeSlots, isDateAvailable } = useBookings()
 const router = useRouter()
 
 const services = ref([])
+const pricing = ref([])
+const selectedServiceType = ref(null) // 'dropoff', 'delivery', or 'onsite'
+const itemCounts = ref({}) // { pricingId: count }
 
 // Fetch pricing from GraphQL
 const fetchServices = async () => {
@@ -320,11 +412,13 @@ const fetchServices = async () => {
           priceType
           features
           serviceCategory
+          order
         }
       }
     `
     const data = await executeQuery(query)
     console.log('Fetched pricing data:', data.pricing)
+    pricing.value = data.pricing.sort((a, b) => (a.order || 0) - (b.order || 0))
     services.value = data.pricing.map(pricing => {
       const service = {
         id: pricing.id,
@@ -340,11 +434,38 @@ const fetchServices = async () => {
   } catch (error) {
     console.error('Error fetching pricing:', error)
     // Fallback to default pricing
-    services.value = [
-      { id: 'basic', name: 'Basic', price: 8, description: 'Small gifts', priceType: 'per-item' },
-      { id: 'premium', name: 'Premium', price: 12, description: 'Medium gifts', priceType: 'per-item' },
-      { id: 'unlimited', name: 'Unlimited', price: 50, description: 'Per hour', priceType: 'per-hour' }
+    pricing.value = [
+      { id: 'basic', name: 'Basic', price: 8, description: 'Small gifts', priceType: 'per-item', serviceCategory: 'dropoff' },
+      { id: 'premium', name: 'Premium', price: 12, description: 'Medium gifts', priceType: 'per-item', serviceCategory: 'dropoff' },
+      { id: 'unlimited', name: 'Unlimited', price: 50, description: 'Per hour', priceType: 'per-hour', serviceCategory: 'onsite' }
     ]
+    services.value = pricing.value
+  }
+}
+
+const filteredPricing = computed(() => {
+  if (!selectedServiceType.value) return []
+  return pricing.value.filter(p => p.serviceCategory === selectedServiceType.value)
+})
+
+const totalItemCount = computed(() => {
+  return Object.values(itemCounts.value).reduce((sum, count) => sum + (count || 0), 0)
+})
+
+const incrementItemCount = (pricingId) => {
+  if (!itemCounts.value[pricingId]) {
+    itemCounts.value[pricingId] = 0
+  }
+  itemCounts.value[pricingId]++
+  // Update form.numberOfGifts to total
+  form.value.numberOfGifts = totalItemCount.value
+}
+
+const decrementItemCount = (pricingId) => {
+  if (itemCounts.value[pricingId] && itemCounts.value[pricingId] > 0) {
+    itemCounts.value[pricingId]--
+    // Update form.numberOfGifts to total
+    form.value.numberOfGifts = totalItemCount.value
   }
 }
 
@@ -402,33 +523,32 @@ watch(selectedDate, async (newDate) => {
   maxGiftsReached.value = false
 }, { immediate: false })
 
-// Watch for time and service selection to calculate max gifts
-watch([selectedTime, () => form.value.service], async ([newTime, newServiceId]) => {
-  if (newTime && newServiceId && selectedDate.value) {
-    // Get service name from service ID
-    const service = services.value.find(s => s.id === newServiceId)
-    if (!service) {
-      maxGifts.value = null
-      maxGiftsReached.value = false
-      return
-    }
-    
+// Watch for time and total item count to calculate max gifts
+watch([selectedTime, totalItemCount], async ([newTime, newCount]) => {
+  if (newTime && selectedDate.value && selectedServiceType.value) {
     checkingMaxGifts.value = true
     try {
       const { executeQuery } = useGraphQL()
+      // Use the first pricing item's name as service identifier, or use service type
+      const serviceName = filteredPricing.value[0]?.name || selectedServiceType.value
       const query = `
         query {
-          maxGiftsForTimeSlot(date: "${selectedDate.value}", time: "${newTime}", service: "${service.name}")
+          maxGiftsForTimeSlot(date: "${selectedDate.value}", time: "${newTime}", service: "${serviceName}")
         }
       `
       const data = await executeQuery(query)
       maxGifts.value = data.maxGiftsForTimeSlot || null
       
       // If current quantity exceeds max, cap it
-      if (maxGifts.value && form.value.numberOfGifts > maxGifts.value) {
-        form.value.numberOfGifts = maxGifts.value
+      if (maxGifts.value && newCount > maxGifts.value) {
+        // Reduce item counts proportionally
+        const ratio = maxGifts.value / newCount
+        for (const pricingId in itemCounts.value) {
+          itemCounts.value[pricingId] = Math.floor(itemCounts.value[pricingId] * ratio)
+        }
+        form.value.numberOfGifts = totalItemCount.value
         maxGiftsReached.value = true
-      } else if (maxGifts.value && form.value.numberOfGifts === maxGifts.value) {
+      } else if (maxGifts.value && newCount === maxGifts.value) {
         maxGiftsReached.value = true
       } else {
         maxGiftsReached.value = false
@@ -446,27 +566,15 @@ watch([selectedTime, () => form.value.service], async ([newTime, newServiceId]) 
   }
 })
 
-// Watch numberOfGifts to check if it exceeds max
-watch(() => form.value.numberOfGifts, (newQuantity) => {
-  if (maxGifts.value && newQuantity > maxGifts.value) {
-    form.value.numberOfGifts = maxGifts.value
-    maxGiftsReached.value = true
-  } else if (maxGifts.value && newQuantity === maxGifts.value) {
-    maxGiftsReached.value = true
-  } else {
-    maxGiftsReached.value = false
-  }
-})
-
 const canSubmit = computed(() => {
-  return form.value.service &&
+  return selectedServiceType.value &&
+         totalItemCount.value > 0 &&
          selectedDate.value &&
          selectedTime.value &&
          form.value.name &&
          form.value.email &&
          form.value.phone &&
-         form.value.address &&
-         form.value.numberOfGifts > 0
+         form.value.address
 })
 
 watch(selectedDate, async (newDate) => {
@@ -504,21 +612,24 @@ const getServiceName = (serviceId) => {
 }
 
 const calculateTotal = () => {
-  if (!form.value.service) return '0.00'
-  const service = services.value.find(s => s.id === form.value.service)
-  if (!service) return '0.00'
-  
   let total = 0
-  if (service.priceType === 'per-hour') {
-    total = service.price
-  } else if (service.priceType === 'fixed') {
-    total = service.price
-  } else {
-    total = service.price * form.value.numberOfGifts
+  
+  // Calculate total from item counts
+  for (const [pricingId, count] of Object.entries(itemCounts.value)) {
+    if (count > 0) {
+      const pricingItem = pricing.value.find(p => p.id === pricingId)
+      if (pricingItem) {
+        if (pricingItem.priceType === 'per-hour') {
+          total += pricingItem.price * Math.max(1, Math.ceil(count / 5)) // Assume 5 items per hour
+        } else {
+          total += pricingItem.price * count
+        }
+      }
+    }
   }
   
-  // Only add delivery fee if serviceCategory is "delivery"
-  if (service.serviceCategory === 'delivery' && total < 50) {
+  // Only add delivery fee if serviceCategory is "delivery" and total < 50
+  if (selectedServiceType.value === 'delivery' && total < 50) {
     total += 15
   }
   
@@ -563,8 +674,15 @@ const closeModal = () => {
   }
   selectedDate.value = ''
   selectedTime.value = ''
+  selectedServiceType.value = null
+  itemCounts.value = {}
   maxGifts.value = null
   maxGiftsReached.value = false
+  // Reset submission state
+  submitting.value = false
+  progressPercent.value = 0
+  progressStatus.value = 'Submitting booking...'
+  progressMessage.value = 'Please wait while we process your request'
   // Restore body scroll
   if (typeof window !== 'undefined') {
     document.body.style.overflow = ''
@@ -598,27 +716,36 @@ const handleSubmit = async () => {
       progressMessage.value = 'Almost done!'
     }, 1000)
     
-    const booking = await createBooking({
+    // Use the first pricing item as the service, or default to service type
+    const primaryPricing = filteredPricing.value[0]
+    const serviceName = primaryPricing?.name || selectedServiceType.value
+    
+    // Prepare booking data but DON'T create it yet - wait for payment
+    const bookingData = {
       ...form.value,
+      service: serviceName,
       date: selectedDate.value,
+      numberOfGifts: totalItemCount.value,
       time: selectedTime.value
-    })
+    }
     
     clearInterval(progressInterval)
     progressPercent.value = 100
-    progressStatus.value = 'Success!'
-    progressMessage.value = 'Your booking has been confirmed'
+    progressStatus.value = 'Ready for Payment'
+    progressMessage.value = 'Preparing payment...'
     
     // Wait to show success state
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    await new Promise(resolve => setTimeout(resolve, 500))
     
     // Calculate total for payment
     const total = parseFloat(calculateTotal())
     
-    // Emit event with booking data and total - parent will show payment modal
+    // Emit event with booking DATA (not created booking) and total - parent will show payment modal
+    // The booking will be created AFTER payment is successful
     emit('booking-created', {
-      booking,
-      total
+      bookingData, // Changed from 'booking' to 'bookingData' - not yet created
+      total,
+      itemCounts: { ...itemCounts.value } // Include item counts for work order creation
     })
     
     // Close booking modal - payment modal will open next
@@ -643,6 +770,12 @@ watch(() => props.isOpen, (isOpen) => {
       // Lock body scroll
       document.body.style.overflow = 'hidden'
       
+      // Reset state when opening modal
+      submitting.value = false
+      progressPercent.value = 0
+      progressStatus.value = 'Submitting booking...'
+      progressMessage.value = 'Please wait while we process your request'
+      
       // Fetch services if not already loaded
       if (services.value.length === 0) {
         fetchServices()
@@ -660,6 +793,11 @@ watch(() => props.isOpen, (isOpen) => {
         document.body.style.overflow = ''
       }
     } else {
+      // Reset state when closing modal
+      submitting.value = false
+      progressPercent.value = 0
+      progressStatus.value = 'Submitting booking...'
+      progressMessage.value = 'Please wait while we process your request'
       document.body.style.overflow = ''
     }
   }

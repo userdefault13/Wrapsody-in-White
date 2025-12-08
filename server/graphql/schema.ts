@@ -19,7 +19,8 @@ export const typeDefs = `#graphql
     numberOfGifts: Int!
     message: String
     status: BookingStatus!
-    items: [BookingItem!]!
+    workOrders: [WorkOrder!]!
+    items: [WorkItem!]! # Legacy support: flattened items from all workOrders
     checkedInAt: String
     checkedInBy: String
     currentStage: WorkflowStage
@@ -55,12 +56,47 @@ export const typeDefs = `#graphql
     unit: String
   }
 
-  type BookingItem {
+  type Size {
+    id: ID!
+    name: SizeName!
+    displayName: String!
+    order: Int!
+    active: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  enum SizeName {
+    xsmall
+    small
+    medium
+    large
+    xl
+  }
+
+  type WorkOrder {
     id: ID!
     bookingId: ID!
+    workOrderNumber: Int!
+    items: [WorkItem!]!
+    status: WorkOrderStatus!
+    assignedWorker: String
+    priority: Int
+    notes: String
+    startedAt: String
+    completedAt: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type WorkItem {
+    id: ID!
+    workOrderId: ID!
+    bookingId: ID
     itemNumber: Int!
     description: String
-    size: String
+    sizeId: ID
+    size: Size
     photos: [String!]!
     serialNumber: String
     serialNumberPhoto: String
@@ -82,6 +118,16 @@ export const typeDefs = `#graphql
     isSmallerThanPaidSize: Boolean!
     createdAt: String!
     updatedAt: String!
+  }
+
+  enum WorkOrderStatus {
+    pending
+    assigned
+    in_progress
+    quality_check
+    ready
+    completed
+    cancelled
   }
 
   enum ItemStatus {
@@ -234,7 +280,12 @@ export const typeDefs = `#graphql
     user(id: ID!, email: String, walletAddress: String): User
     workers(workerType: WorkerType): [Worker!]!
     worker(id: ID, walletAddress: String): Worker
-    bookingItems(bookingId: ID!): [BookingItem!]!
+    sizes(active: Boolean): [Size!]!
+    size(id: ID, name: SizeName): Size
+    workOrders(bookingId: ID, status: WorkOrderStatus, assignedWorker: String): [WorkOrder!]!
+    workOrder(id: ID!): WorkOrder
+    workItems(workOrderId: ID!): [WorkItem!]!
+    workItem(id: ID!): WorkItem
     terminalBookings(stage: WorkflowStage): [Booking!]!
   }
 
@@ -445,11 +496,40 @@ export const typeDefs = `#graphql
     unit: String
   }
 
-  input AddBookingItemInput {
+  input CreateSizeInput {
+    name: SizeName!
+    displayName: String!
+    order: Int!
+    active: Boolean
+  }
+
+  input UpdateSizeInput {
+    id: ID!
+    displayName: String
+    order: Int
+    active: Boolean
+  }
+
+  input CreateWorkOrderInput {
     bookingId: ID!
+    workOrderNumber: Int!
+    priority: Int
+    notes: String
+  }
+
+  input UpdateWorkOrderInput {
+    id: ID!
+    status: WorkOrderStatus
+    assignedWorker: String
+    priority: Int
+    notes: String
+  }
+
+  input AddWorkItemInput {
+    workOrderId: ID!
     itemNumber: Int!
     description: String
-    size: String
+    sizeId: ID
     photos: [String!]
     serialNumber: String
     serialNumberPhoto: String
@@ -460,10 +540,10 @@ export const typeDefs = `#graphql
     isSmallerThanPaidSize: Boolean
   }
 
-  input UpdateBookingItemInput {
+  input UpdateWorkItemInput {
     id: ID!
     description: String
-    size: String
+    sizeId: ID
     photos: [String!]
     serialNumber: String
     serialNumberPhoto: String
@@ -485,12 +565,12 @@ export const typeDefs = `#graphql
   }
 
   input AssignWorkerInput {
-    itemId: ID!
+    workItemId: ID!
     workerId: String!
   }
 
   input RecordMaterialsInput {
-    itemId: ID!
+    workItemId: ID!
     materialsUsed: [MaterialUsedInput!]!
   }
 
@@ -516,10 +596,15 @@ export const typeDefs = `#graphql
     updateWorker(input: UpdateWorkerInput!): Worker!
     addWorkerPackage(input: AddWorkerPackageInput!): Worker!
     checkInBooking(input: CheckInBookingInput!): Booking!
-    addBookingItem(input: AddBookingItemInput!): BookingItem!
-    updateBookingItem(input: UpdateBookingItemInput!): BookingItem!
-    assignWorker(input: AssignWorkerInput!): BookingItem!
-    recordMaterialsUsed(input: RecordMaterialsInput!): BookingItem!
+    createSize(input: CreateSizeInput!): Size!
+    updateSize(input: UpdateSizeInput!): Size!
+    deleteSize(id: ID!): Boolean!
+    createWorkOrder(input: CreateWorkOrderInput!): WorkOrder!
+    updateWorkOrder(input: UpdateWorkOrderInput!): WorkOrder!
+    addWorkItem(input: AddWorkItemInput!): WorkItem!
+    updateWorkItem(input: UpdateWorkItemInput!): WorkItem!
+    assignWorker(input: AssignWorkerInput!): WorkItem!
+    recordMaterialsUsed(input: RecordMaterialsInput!): WorkItem!
   }
 `
 

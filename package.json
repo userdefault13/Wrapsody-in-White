@@ -21,6 +21,7 @@
     "@as-integrations/h3": "^1.2.1",
     "@stripe/stripe-js": "^8.5.3",
     "@types/nodemailer": "^7.0.4",
+    "@vuepic/vue-datepicker": "^12.1.0",
     "@zxing/library": "^0.21.3",
     "ethers": "^6.0.0",
     "graphql": "^16.12.0",

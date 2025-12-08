@@ -118,13 +118,16 @@ async function getWorkerAvailability(workerId: string | undefined): Promise<any>
     if (worker && worker.availabilityId) {
       const availability = await db.collection('availability').findOne({ id: worker.availabilityId })
       if (availability) {
+        console.log(`getWorkerAvailability: Found worker-specific schedule for workerId ${workerId}`)
         return availability
       }
     }
   }
   
   // Fall back to global schedule
-  return await db.collection('availability').findOne({ type: 'schedule' })
+  const globalSchedule = await db.collection('availability').findOne({ type: 'schedule' })
+  console.log(`getWorkerAvailability: Using global schedule, found: ${globalSchedule ? 'yes' : 'no'}, dayOfWeekSchedules count: ${globalSchedule?.dayOfWeekSchedules?.length || 0}`)
+  return globalSchedule
 }
 
 // Helper function to get available time slots for a date
@@ -163,8 +166,9 @@ async function getAvailableTimeSlotsForDate(date: string, workerId?: string): Pr
     baseSlots = dayAvailability.slots || []
   }
 
-  // If no specific schedule and no day-of-week schedule, fall back to default (6 AM - 6 PM, last booking at 6pm)
-  if (baseSlots.length === 0 && !daySchedule) {
+  // If no slots found (either no daySchedule, or daySchedule has no slots, and no specific date override),
+  // fall back to default (6 AM - 6 PM, last booking at 6pm)
+  if (baseSlots.length === 0) {
     for (let hour = 6; hour <= 18; hour++) {
       baseSlots.push(`${hour.toString().padStart(2, '0')}:00`)
     }
@@ -196,18 +200,28 @@ async function getAvailableTimeSlotsForDate(date: string, workerId?: string): Pr
 
 // Helper function to check if a date is available
 async function isDateAvailableCheck(date: string, workerId?: string): Promise<boolean> {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  
   // Parse date string as local date (YYYY-MM-DD format) to avoid timezone issues
   const [year, month, day] = date.split('-').map(Number)
   const selectedDate = new Date(year, month - 1, day) // month is 0-indexed
   selectedDate.setHours(0, 0, 0, 0)
+  
+  // Get today's date in local timezone (not UTC) to avoid timezone issues
+  const now = new Date()
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  todayLocal.setHours(0, 0, 0, 0)
 
-  if (selectedDate < today) {
+  // Compare dates using time values for accurate comparison
+  const selectedTime = selectedDate.getTime()
+  const todayTime = todayLocal.getTime()
+
+  console.log(`isDateAvailableCheck for ${date}${workerId ? ` (worker: ${workerId})` : ''}: Comparing selectedDate ${selectedDate.toISOString()} (time: ${selectedTime}) with today ${todayLocal.toISOString()} (time: ${todayTime})`)
+  
+  if (selectedTime < todayTime) {
     console.log(`isDateAvailableCheck for ${date}${workerId ? ` (worker: ${workerId})` : ''}: Date is in the past. Returning false.`)
     return false
   }
+  
+  console.log(`isDateAvailableCheck for ${date}${workerId ? ` (worker: ${workerId})` : ''}: Date is not in the past (selectedTime: ${selectedTime}, todayTime: ${todayTime}), continuing with availability check`)
 
   const db = await getDatabase()
   // Use the same local date parsing to get correct dayOfWeek
@@ -217,36 +231,46 @@ async function isDateAvailableCheck(date: string, workerId?: string): Promise<bo
 
   // Get availability schedule (worker-specific or global)
   const scheduleDoc = await getWorkerAvailability(workerId)
+  if (!scheduleDoc) {
+    console.log(`isDateAvailableCheck: No schedule document found for workerId ${workerId || 'global'}, falling back to getAvailableTimeSlotsForDate`)
+    const slots = await getAvailableTimeSlotsForDate(date, workerId)
+    console.log(`isDateAvailableCheck: No schedule found, using getAvailableTimeSlotsForDate result: ${slots.length} slots, returning ${slots.length > 0}`)
+    return slots.length > 0
+  }
   const dayOfWeekSchedules = scheduleDoc?.dayOfWeekSchedules || []
   const availability = scheduleDoc?.availability || []
+  console.log(`isDateAvailableCheck: Schedule document found, has ${dayOfWeekSchedules.length} dayOfWeekSchedules, looking for dayOfWeek ${dayOfWeek}`)
 
   // 1. Check day-of-week schedule first
   const daySchedule = dayOfWeekSchedules.find((s: any) => s.dayOfWeek === dayOfWeek)
   if (daySchedule) {
+    console.log(`isDateAvailableCheck: Found daySchedule for dayOfWeek ${dayOfWeek}, isBlocked: ${daySchedule.isBlocked}, slots count: ${daySchedule.slots?.length || 0}`)
     if (daySchedule.isBlocked) {
       console.log(`Date ${date} (dayOfWeek ${dayOfWeek}) is blocked`)
       return false
     }
-    if (daySchedule.slots.length > 0) {
-      const slots = await getAvailableTimeSlotsForDate(date, workerId)
-      console.log(`Date ${date} (dayOfWeek ${dayOfWeek}) has ${slots.length} available slots`)
-      return slots.length > 0
-    }
-    console.log(`Date ${date} (dayOfWeek ${dayOfWeek}) has no slots configured`)
-    return false
+    // Even if daySchedule has no slots, check getAvailableTimeSlotsForDate
+    // because it might have specific date overrides or default slots
+    const slots = await getAvailableTimeSlotsForDate(date, workerId)
+    console.log(`isDateAvailableCheck: Date ${date} (dayOfWeek ${dayOfWeek}) has ${slots.length} available slots, returning ${slots.length > 0}`)
+    return slots.length > 0
   }
+  console.log(`isDateAvailableCheck: No daySchedule found for dayOfWeek ${dayOfWeek}`)
 
   // 2. Check specific date availability
   const dayAvailability = availability.find((a: any) => a.date === date)
   if (dayAvailability) {
-    if (dayAvailability.isAvailable && dayAvailability.slots.length > 0) {
-      const slots = await getAvailableTimeSlotsForDate(date, workerId)
-      return slots.length > 0
+    if (!dayAvailability.isAvailable) {
+      console.log(`Date ${date} is specifically marked as not available`)
+      return false
     }
-    return false
+    // Check available slots (getAvailableTimeSlotsForDate will use the specific date slots)
+    const slots = await getAvailableTimeSlotsForDate(date, workerId)
+    console.log(`Date ${date} (specific date availability) has ${slots.length} available slots`)
+    return slots.length > 0
   }
 
-  // 3. Default: check if date has available slots
+  // 3. Default: check if date has available slots (getAvailableTimeSlotsForDate will generate default slots)
   const slots = await getAvailableTimeSlotsForDate(date, workerId)
   console.log(`Date ${date} (dayOfWeek ${dayOfWeek}) - no schedule found, using default slots: ${slots.length}`)
   return slots.length > 0

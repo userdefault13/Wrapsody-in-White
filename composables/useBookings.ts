@@ -203,13 +203,27 @@ export const useBookings = () => {
   }
 
   const isDateAvailable = async (date: string): Promise<boolean> => {
-    // Don't allow past dates
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const selectedDate = new Date(date)
+    // Parse date string as local date (YYYY-MM-DD format) to avoid timezone issues
+    // This matches the server-side parsing logic
+    const [year, month, day] = date.split('-').map(Number)
+    const selectedDate = new Date(year, month - 1, day) // month is 0-indexed
     selectedDate.setHours(0, 0, 0, 0)
     
-    if (selectedDate < today) return false
+    // Get today's date in local timezone (not UTC) to avoid timezone issues
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    today.setHours(0, 0, 0, 0)
+    
+    // Compare dates using time values for accurate comparison
+    const selectedTime = selectedDate.getTime()
+    const todayTime = today.getTime()
+    
+    console.log(`[isDateAvailable] Checking date ${date}, selectedDate: ${selectedDate.toISOString()} (time: ${selectedTime}), today: ${today.toISOString()} (time: ${todayTime}), isPast: ${selectedTime < todayTime}`)
+    
+    if (selectedTime < todayTime) {
+      console.log(`[isDateAvailable] Date ${date} is in the past, returning false`)
+      return false
+    }
 
     // Check via GraphQL API (primary method)
     try {
@@ -219,8 +233,12 @@ export const useBookings = () => {
           isDateAvailable(date: "${date}")
         }
       `
+      console.log(`[isDateAvailable] Executing GraphQL query for date ${date}`)
       const data = await executeQuery(query)
-      return data.isDateAvailable || false
+      console.log(`[isDateAvailable] GraphQL response for date ${date}:`, data)
+      const result = data.isDateAvailable || false
+      console.log(`[isDateAvailable] Final result for date ${date}:`, result)
+      return result
     } catch (error) {
       console.error('Error checking date availability via API:', error)
       // Fallback to localStorage check if API fails

@@ -157,12 +157,14 @@
                   </label>
                   <input
                     id="date"
+                    ref="dateInput"
                     v-model="selectedDate"
                     type="date"
                     :min="minDate"
                     required
                     @change="selectedTime = ''"
-                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    @click="openDatePicker"
+                    class="date-input w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white cursor-pointer"
                   />
                   <p v-if="selectedDate" class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
                     {{ formatDate(selectedDate) }}
@@ -185,7 +187,7 @@
                   </div>
                   <div v-else class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <button
-                      v-for="slot in availableTimeSlots"
+                      v-for="slot in filteredTimeSlots"
                       :key="slot"
                       type="button"
                       :class="[
@@ -199,7 +201,7 @@
                       {{ formatTime(slot) }}
                     </button>
                   </div>
-                  <p v-if="!loadingSlots && availableTimeSlots.length === 0" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p v-if="!loadingSlots && filteredTimeSlots.length === 0" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     No available time slots for this date.
                   </p>
                 </div>
@@ -483,6 +485,7 @@ const form = ref({
 
 const selectedDate = ref('')
 const selectedTime = ref('')
+const dateInput = ref(null)
 const submitting = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Submitting booking...')
@@ -498,6 +501,40 @@ const checkingAvailability = ref(false)
 
 const availableTimeSlots = ref([])
 const loadingSlots = ref(false)
+
+// Filter out past time slots if the selected date is today
+const filteredTimeSlots = computed(() => {
+  if (!selectedDate.value || availableTimeSlots.value.length === 0) {
+    return []
+  }
+  
+  // Parse selected date as local date
+  const [year, month, day] = selectedDate.value.split('-').map(Number)
+  const selectedDateObj = new Date(year, month - 1, day)
+  selectedDateObj.setHours(0, 0, 0, 0)
+  
+  // Get today's date in local timezone
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  today.setHours(0, 0, 0, 0)
+  
+  // Check if selected date is today
+  const isToday = selectedDateObj.getTime() === today.getTime()
+  
+  if (!isToday) {
+    // For future dates, return all slots
+    return availableTimeSlots.value
+  }
+  
+  // For today, filter out past time slots
+  const currentTime = now.getHours() * 60 + now.getMinutes() // Current time in minutes
+  
+  return availableTimeSlots.value.filter(slot => {
+    const [hours, minutes] = slot.split(':').map(Number)
+    const slotTime = hours * 60 + (minutes || 0) // Slot time in minutes
+    return slotTime > currentTime // Only include slots that are in the future
+  })
+})
 
 const maxGifts = ref(null)
 const maxGiftsReached = ref(false)
@@ -634,6 +671,23 @@ const calculateTotal = () => {
   }
   
   return total.toFixed(2)
+}
+
+const openDatePicker = () => {
+  // Focus the input and trigger the native date picker
+  if (dateInput.value) {
+    dateInput.value.focus()
+    // For some browsers, we need to trigger a click on the input to open the picker
+    // The focus should be enough, but we can also try showPicker() if available
+    if (dateInput.value.showPicker) {
+      try {
+        dateInput.value.showPicker()
+      } catch (error) {
+        // showPicker() might not be supported in all browsers
+        // Fall back to just focusing
+      }
+    }
+  }
 }
 
 const formatDate = (dateString) => {
@@ -809,6 +863,33 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Date input styling with custom calendar color */
+.date-input {
+  --calendar-color: #5D8FB0;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--calendar-color);
+  box-shadow: 0 0 0 2px var(--calendar-color);
+}
+
+/* Style the calendar icon */
+.date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: brightness(0) saturate(100%) invert(48%) sepia(15%) saturate(1200%) hue-rotate(170deg) brightness(95%) contrast(85%);
+}
+
+.date-input::-webkit-calendar-picker-indicator:hover {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(15%) saturate(1200%) hue-rotate(170deg) brightness(110%) contrast(85%);
+}
+
+/* For Firefox */
+.date-input::-moz-calendar-picker-indicator {
+  cursor: pointer;
+  filter: brightness(0) saturate(100%) invert(48%) sepia(15%) saturate(1200%) hue-rotate(170deg) brightness(95%) contrast(85%);
+}
+
 .modal-enter-active,
 .modal-leave-active {
   transition: opacity 0.3s ease;

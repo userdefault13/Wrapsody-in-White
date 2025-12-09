@@ -287,14 +287,6 @@ const displayItems = computed(() => {
   return []
 })
 
-watch([() => props.isOpen, () => props.booking, () => props.workOrderId], async ([isOpen, booking, workOrderId]) => {
-  if (isOpen && (booking || workOrderId)) {
-    await loadWorkOrder()
-  } else {
-    workOrder.value = null
-  }
-}, { immediate: true })
-
 const loadWorkOrder = async () => {
   if (!props.booking && !props.workOrderId) return
   
@@ -408,6 +400,14 @@ const loadWorkOrder = async () => {
     loading.value = false
   }
 }
+
+watch([() => props.isOpen, () => props.booking, () => props.workOrderId], async ([isOpen, booking, workOrderId]) => {
+  if (isOpen && (booking || workOrderId)) {
+    await loadWorkOrder()
+  } else {
+    workOrder.value = null
+  }
+}, { immediate: true })
 
 const close = () => {
   emit('close')

@@ -60,7 +60,7 @@
             </div>
 
             <!-- Content -->
-            <div v-if="item" class="p-6 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div v-if="item" ref="contentContainer" class="p-6 max-h-[calc(100vh-300px)] overflow-y-auto">
               <!-- Item Details -->
               <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <div class="grid grid-cols-2 gap-4">
@@ -88,6 +88,7 @@
                 <div
                   v-for="(check, index) in qualityChecks"
                   :key="index"
+                  :ref="el => { if (el) stepRefs[index] = el }"
                   class="p-4 rounded-lg border-2 transition-all"
                   :class="completedSteps[index] 
                     ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' 
@@ -251,6 +252,10 @@ const emit = defineEmits(['close', 'complete', 'progress-saved', 'move-back'])
 const { executeQuery } = useGraphQL()
 const saving = ref(false)
 
+// Track step refs for scrolling
+const stepRefs = ref([])
+const contentContainer = ref(null)
+
 // Quality check checklist items
 const qualityChecks = computed(() => [
   {
@@ -336,9 +341,12 @@ watch(() => props.isOpen, async (isOpen) => {
     await nextTick()
     setTimeout(() => {
       loadProgress()
+      // Reset step refs
+      stepRefs.value = []
     }, 100)
   } else {
     completedSteps.value = []
+    stepRefs.value = []
   }
 })
 
@@ -384,6 +392,34 @@ const completeStep = async (index) => {
   completedSteps.value[index] = true
   // Save to database immediately
   await saveProgressToDB()
+  
+  // Scroll to next incomplete step
+  await nextTick()
+  scrollToNextStep(index)
+}
+
+const scrollToNextStep = (currentIndex) => {
+  // Find the next incomplete step
+  const nextIndex = completedSteps.value.findIndex((completed, idx) => idx > currentIndex && !completed)
+  
+  if (nextIndex !== -1 && stepRefs.value[nextIndex] && contentContainer.value) {
+    const nextStepElement = stepRefs.value[nextIndex]
+    const container = contentContainer.value
+    
+    if (nextStepElement && container) {
+      // Wait a bit for DOM to update
+      setTimeout(() => {
+        const elementRect = nextStepElement.getBoundingClientRect()
+        const containerRect = container.getBoundingClientRect()
+        const scrollOffset = elementRect.top - containerRect.top + container.scrollTop - 20 // 20px padding
+        
+        container.scrollTo({
+          top: scrollOffset,
+          behavior: 'smooth'
+        })
+      }, 100)
+    }
+  }
 }
 
 const undoStep = async (index) => {

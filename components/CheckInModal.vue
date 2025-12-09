@@ -201,6 +201,54 @@
                         </div>
                       </div>
 
+                      <!-- Box Dimension Selection -->
+                      <div v-if="item.size && !item.hasSizeDiscrepancy" class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Select Box Dimension *
+                        </label>
+                        <div v-if="loadingBoxDimensions[index]" class="text-sm text-gray-500 dark:text-gray-400 py-2">
+                          Loading box dimensions...
+                        </div>
+                        <div v-else-if="itemBoxDimensions[index] && itemBoxDimensions[index].length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          <button
+                            v-for="dimension in itemBoxDimensions[index]"
+                            :key="dimension.id"
+                            @click="item.boxDimensionId = dimension.id"
+                            :class="[
+                              'p-3 rounded-lg border-2 transition-all text-left',
+                              item.boxDimensionId === dimension.id
+                                ? 'border-primary-600 dark:border-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                                : 'border-gray-200 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700 bg-white dark:bg-gray-700'
+                            ]"
+                          >
+                            <div class="flex items-start justify-between mb-1">
+                              <span class="font-semibold text-sm text-gray-900 dark:text-white">
+                                {{ getDimensionLabel(dimension) }}
+                              </span>
+                              <svg
+                                v-if="item.boxDimensionId === dimension.id"
+                                class="w-4 h-4 text-primary-600 dark:text-primary-400 flex-shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                            <div class="text-xs text-gray-600 dark:text-gray-400">
+                              <div>{{ dimension.length }} × {{ dimension.width }} × {{ dimension.height }} in</div>
+                              <div class="mt-0.5">Paper: {{ dimension.wrappingPaperNeeded.toFixed(1) }} sq in</div>
+                            </div>
+                          </button>
+                        </div>
+                        <div v-else-if="item.size" class="text-sm text-gray-500 dark:text-gray-400 py-2">
+                          No box dimensions available for this size
+                        </div>
+                        <p v-if="!item.boxDimensionId && item.size && !item.hasSizeDiscrepancy" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                          Please select a box dimension
+                        </p>
+                      </div>
+
                       <div>
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                           From
@@ -344,7 +392,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'checked-in', 'payment-adjustment'])
+const emit = defineEmits(['close', 'checked-in', 'payment-adjustment', 'show-summary'])
 
 const { executeQuery } = useGraphQL()
 const { walletAddress } = useAuth()
@@ -501,6 +549,40 @@ const searchBooking = async () => {
   }
 
   const selectBooking = async (booking) => {
+    // Check if booking has already been checked in
+    const checkIfCheckedIn = `
+      query CheckIfCheckedIn($bookingId: ID!) {
+        workOrders(bookingId: $bookingId) {
+          id
+          items {
+            id
+            status
+          }
+        }
+      }
+    `
+    
+    try {
+      const checkResult = await executeQuery(checkIfCheckedIn, { bookingId: booking.id })
+      const workOrders = checkResult.workOrders || []
+      
+      // Check if any items have been checked in (status != 'pending_checkin')
+      const hasCheckedInItems = workOrders.some(wo => 
+        wo.items && wo.items.some(item => 
+          item.status && item.status !== 'pending_checkin'
+        )
+      )
+      
+      if (hasCheckedInItems) {
+        // Show read-only summary modal instead
+        emit('show-summary', booking)
+        return
+      }
+    } catch (error) {
+      console.warn('Could not check if booking is already checked in:', error)
+      // Continue with normal flow if check fails
+    }
+    
     selectedBooking.value = booking
     searchQuery.value = ''
     searchResults.value = []
@@ -518,17 +600,129 @@ const searchBooking = async () => {
 
 const canCheckIn = computed(() => {
   return items.value.length > 0 && 
-         items.value.every(item => item.description && item.description.trim())
+         items.value.every(item => {
+           const hasDescription = item.description && item.description.trim()
+           // Box dimension is required if size is set and there's no size discrepancy
+           const hasBoxDimension = item.hasSizeDiscrepancy || item.boxDimensionId || !item.size
+           return hasDescription && hasBoxDimension
+         })
 })
+
+const itemBoxDimensions = ref({}) // { index: [dimensions] }
+const loadingBoxDimensions = ref({}) // { index: boolean }
+
+const getDimensionLabel = (dimension) => {
+  // Extract the number from the ID (e.g., "boxdim-xsmall-1" -> "xsmall-1")
+  const match = dimension.id.match(/boxdim-(\w+)-(\d+)/)
+  if (match) {
+    const sizeName = match[1]
+    const number = match[2]
+    return `${sizeName}-${number}`
+  }
+  return dimension.id
+}
+
+const loadBoxDimensionsForItem = async (itemIndex, sizeString) => {
+  if (!sizeString) {
+    itemBoxDimensions.value[itemIndex] = []
+    return
+  }
+
+  loadingBoxDimensions.value[itemIndex] = true
+  
+  try {
+    // First, get the sizeId from the size string
+    const sizesQuery = `
+      query {
+        sizes(active: true) {
+          id
+          name
+          displayName
+        }
+      }
+    `
+    const sizesData = await executeQuery(sizesQuery)
+    const sizes = sizesData.sizes || []
+    
+    // Map size string to sizeId
+    const sizeMap = {
+      'XSmall': ['xsmall', 'x-small', 'extra-small'],
+      'Small': ['small'],
+      'Medium': ['medium'],
+      'Large': ['large'],
+      'XLarge': ['xl', 'x-large', 'extra-large']
+    }
+    
+    const sizeKey = Object.keys(sizeMap).find(key => 
+      sizeString.toLowerCase().includes(key.toLowerCase())
+    )
+    
+    let sizeId = null
+    if (sizeKey) {
+      const matchingSizeNames = sizeMap[sizeKey]
+      const matchingSize = sizes.find(s => 
+        matchingSizeNames.some(name => 
+          s.name.toLowerCase() === name.toLowerCase() || 
+          s.displayName.toLowerCase().includes(name.toLowerCase())
+        )
+      )
+      if (matchingSize) {
+        sizeId = matchingSize.id
+      }
+    }
+    
+    // Fallback: try direct match
+    if (!sizeId) {
+      const directMatch = sizes.find(s => 
+        s.displayName.toLowerCase() === sizeString.toLowerCase() ||
+        s.name.toLowerCase() === sizeString.toLowerCase()
+      )
+      if (directMatch) {
+        sizeId = directMatch.id
+      }
+    }
+    
+    if (!sizeId) {
+      console.warn(`Could not find sizeId for size: ${sizeString}`)
+      itemBoxDimensions.value[itemIndex] = []
+      return
+    }
+    
+    // Fetch box dimensions for this size
+    const boxDimensionsQuery = `
+      query GetBoxDimensions($sizeId: ID!) {
+        boxDimensions(sizeId: $sizeId, active: true) {
+          id
+          sizeId
+          length
+          width
+          height
+          surfaceArea
+          wrappingPaperNeeded
+          wasteFactor
+        }
+      }
+    `
+    
+    const boxDimensionsData = await executeQuery(boxDimensionsQuery, { sizeId })
+    itemBoxDimensions.value[itemIndex] = boxDimensionsData.boxDimensions || []
+  } catch (error) {
+    console.error(`Error loading box dimensions for item ${itemIndex}:`, error)
+    itemBoxDimensions.value[itemIndex] = []
+  } finally {
+    loadingBoxDimensions.value[itemIndex] = false
+  }
+}
 
 const addItem = (defaultSize = '') => {
   // Auto-populate giftFrom with booking's firstName if available
   const firstName = selectedBooking.value?.firstName || ''
   
-  items.value.push({
+  const newItem = {
     description: '',
     size: defaultSize,
     sizeId: null, // Will be set based on size string
+    boxDimensionId: null,
     photos: [],
     serialNumber: '',
     serialNumberPhoto: '',
@@ -540,8 +734,32 @@ const addItem = (defaultSize = '') => {
     hasSizeDiscrepancy: false,
     isLargerThanPaidSize: false,
     isSmallerThanPaidSize: false
-  })
+  }
+  
+  const itemIndex = items.value.length
+  items.value.push(newItem)
+  
+  // Load box dimensions if size is provided
+  if (defaultSize) {
+    loadBoxDimensionsForItem(itemIndex, defaultSize)
+  }
 }
+
+// Watch for size changes to load box dimensions
+watch(() => items.value.map((item, index) => ({ index, size: item.size, hasDiscrepancy: item.hasSizeDiscrepancy })), 
+  async (newValues) => {
+    for (const { index, size, hasDiscrepancy } of newValues) {
+      if (size && !hasDiscrepancy) {
+        await loadBoxDimensionsForItem(index, size)
+      } else {
+        // Clear box dimensions if size is cleared or has discrepancy
+        itemBoxDimensions.value[index] = []
+        items.value[index].boxDimensionId = null
+      }
+    }
+  },
+  { deep: true }
+)
 
 const removeItem = (index) => {
   items.value.splice(index, 1)
@@ -799,7 +1017,7 @@ const handleCheckIn = async () => {
         }
       }
       
-      await executeQuery(addItemMutation, {
+      const addItemResult = await executeQuery(addItemMutation, {
         input: {
           workOrderId: workOrderId,
           itemNumber: itemNumber,
@@ -817,6 +1035,25 @@ const handleCheckIn = async () => {
           isSmallerThanPaidSize: item.isSmallerThanPaidSize || false
         }
       })
+      
+      // Update the work item with boxDimensionId if selected
+      if (item.boxDimensionId && addItemResult?.addWorkItem?.id) {
+        const updateItemMutation = `
+          mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+            updateWorkItem(input: $input) {
+              id
+              boxDimensionId
+            }
+          }
+        `
+        
+        await executeQuery(updateItemMutation, {
+          input: {
+            id: addItemResult.addWorkItem.id,
+            boxDimensionId: item.boxDimensionId
+          }
+        })
+      }
     }
 
     // Update all items in the work order to checked_in status

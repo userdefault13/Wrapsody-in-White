@@ -76,6 +76,21 @@ export const typeDefs = `#graphql
     xl
   }
 
+  type BoxDimension {
+    id: ID!
+    sizeId: ID!
+    size: Size
+    length: Float!
+    width: Float!
+    height: Float!
+    surfaceArea: Float!
+    wrappingPaperNeeded: Float!
+    wasteFactor: Float!
+    active: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
   type WorkOrder {
     id: ID!
     bookingId: ID!
@@ -113,6 +128,8 @@ export const typeDefs = `#graphql
     wrappingStartedAt: String
     wrappingCompletedAt: String
     wrappingProgress: [Boolean!]!
+    boxDimensionId: ID
+    wrappingAttempts: Int
     qualityCheckedAt: String
     qualityCheckProgress: [Boolean!]!
     readyAt: String
@@ -253,8 +270,13 @@ export const typeDefs = `#graphql
     type: InventoryType!
     size: String
     cost: Float!
-    quantity: Int!
+    quantity: Float!
     unit: String
+    rollLength: Float
+    rollWidth: Float
+    totalArea: Float
+    remainingArea: Float
+    minUsableArea: Float
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -286,6 +308,8 @@ export const typeDefs = `#graphql
     worker(id: ID, walletAddress: String): Worker
     sizes(active: Boolean): [Size!]!
     size(id: ID, name: SizeName): Size
+    boxDimensions(sizeId: ID, active: Boolean): [BoxDimension!]!
+    boxDimension(id: ID!): BoxDimension
     workOrders(bookingId: ID, status: WorkOrderStatus, assignedWorker: String): [WorkOrder!]!
     workOrder(id: ID!): WorkOrder
     workItems(workOrderId: ID!): [WorkItem!]!
@@ -471,8 +495,10 @@ export const typeDefs = `#graphql
     type: InventoryType!
     size: String
     cost: Float!
-    quantity: Int!
+    quantity: Float!
     unit: String
+    rollLength: Float
+    rollWidth: Float
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -486,13 +512,34 @@ export const typeDefs = `#graphql
     type: InventoryType
     size: String
     cost: Float
-    quantity: Int
+    quantity: Float
     unit: String
+    rollLength: Float
+    rollWidth: Float
     supplier: String
     thumbnail: String
     amazonAsin: String
     amazonUrl: String
     notes: String
+  }
+
+  input CreateBoxDimensionInput {
+    sizeId: ID!
+    length: Float!
+    width: Float!
+    height: Float!
+    wasteFactor: Float
+    active: Boolean
+  }
+
+  input UpdateBoxDimensionInput {
+    id: ID!
+    sizeId: ID
+    length: Float
+    width: Float
+    height: Float
+    wasteFactor: Float
+    active: Boolean
   }
 
   input MaterialUsedInput {
@@ -563,6 +610,8 @@ export const typeDefs = `#graphql
     assignedWorker: String
     materialsUsed: [MaterialUsedInput!]
     wrappingProgress: [Boolean!]
+    boxDimensionId: ID
+    wrappingAttempts: Int
     qualityCheckProgress: [Boolean!]
     isExpensiveElectronics: Boolean
     isLargerThanPaidSize: Boolean
@@ -609,6 +658,9 @@ export const typeDefs = `#graphql
     createSize(input: CreateSizeInput!): Size!
     updateSize(input: UpdateSizeInput!): Size!
     deleteSize(id: ID!): Boolean!
+    createBoxDimension(input: CreateBoxDimensionInput!): BoxDimension!
+    updateBoxDimension(input: UpdateBoxDimensionInput!): BoxDimension!
+    deleteBoxDimension(id: ID!): Boolean!
     createWorkOrder(input: CreateWorkOrderInput!): WorkOrder!
     updateWorkOrder(input: UpdateWorkOrderInput!): WorkOrder!
     addWorkItem(input: AddWorkItemInput!): WorkItem!

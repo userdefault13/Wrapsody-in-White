@@ -29,6 +29,16 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
+          <!-- Assigned Badge (Blue - Assigned color) -->
+          <div
+            v-if="isAssigned"
+            class="flex items-center justify-center w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+            title="Assigned to Worker"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
         </div>
         <p v-if="booking" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
           {{ booking.name }}
@@ -107,11 +117,18 @@ const props = defineProps({
 const emit = defineEmits(['update-status', 'view-details'])
 
 const hasWorkerStarted = computed(() => {
-  // Show badge if worker is assigned, wrapping has started, or progress exists
-  return !!(props.item.assignedWorker || props.item.wrappingStartedAt || (props.item.wrappingProgress && props.item.wrappingProgress.some(Boolean)))
+  // Show purple badge if wrapping has actually started (not just assigned)
+  // Check for wrappingStartedAt timestamp or wrapping progress
+  return !!(props.item.wrappingStartedAt || (props.item.wrappingProgress && props.item.wrappingProgress.some(Boolean)))
 })
 
 const isWrapping100Percent = computed(() => {
+  // Check wrappingCompletedAt timestamp first (most reliable)
+  if (props.item.wrappingCompletedAt) {
+    return true
+  }
+  
+  // Fallback to checking wrappingProgress array
   if (!props.item.wrappingProgress || !Array.isArray(props.item.wrappingProgress)) {
     return false
   }
@@ -122,6 +139,12 @@ const isWrapping100Percent = computed(() => {
 })
 
 const isQA100Percent = computed(() => {
+  // Check qualityCheckedAt timestamp first (most reliable)
+  if (props.item.qualityCheckedAt) {
+    return true
+  }
+  
+  // Fallback to checking qualityCheckProgress array
   if (!props.item.qualityCheckProgress || !Array.isArray(props.item.qualityCheckProgress)) {
     return false
   }
@@ -129,6 +152,11 @@ const isQA100Percent = computed(() => {
   if (totalSteps === 0) return false
   const completedSteps = props.item.qualityCheckProgress.filter(Boolean).length
   return completedSteps === totalSteps
+})
+
+const isAssigned = computed(() => {
+  // Always show blue badge if item has assignedWorker
+  return !!props.item.assignedWorker
 })
 
 const workerName = computed(() => {

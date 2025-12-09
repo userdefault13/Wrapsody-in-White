@@ -80,13 +80,14 @@
                         {{ formatDateHeader(date) }}
                       </div>
                       <div class="flex flex-wrap gap-2">
-                        <span
+                        <button
                           v-for="slot in dateSlots"
                           :key="`${date}-${slot}`"
-                          class="px-3 py-1.5 text-xs font-medium bg-primary-100 dark:bg-dark-700 text-primary-800 dark:text-dark-200 rounded-md"
+                          @click="openBookingModalWithSlot(date, slot)"
+                          class="px-3 py-1.5 text-xs font-medium bg-primary-100 dark:bg-dark-700 text-primary-800 dark:text-dark-200 rounded-md hover:bg-primary-200 dark:hover:bg-dark-600 transition-colors cursor-pointer"
                         >
                           {{ formatTime(slot) }}
-                        </span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -256,6 +257,8 @@
     <!-- Booking Modal -->
     <BookingModal
       :is-open="isBookingModalOpen"
+      :initial-date="selectedBookingDate"
+      :initial-time="selectedBookingTime"
       @close="closeBookingModal"
       @booking-created="handleBookingCreated"
     />
@@ -304,6 +307,8 @@ const loadingServices = ref(true)
 const loadingPricing = ref(true)
 const availableSlots = ref([])
 const loadingSlots = ref(true)
+const selectedBookingDate = ref(null)
+const selectedBookingTime = ref(null)
 
 // Get first 3 service types for homepage
 const homepageServiceTypes = computed(() => {
@@ -385,15 +390,41 @@ const fetchPricing = async () => {
   }
 }
 
-// Group available slots by date
+// Group available slots by date and filter past time slots for today
 const groupedSlots = computed(() => {
   const grouped = {}
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth()
+  const todayDay = today.getDate()
+  const todayDateString = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(todayDay).padStart(2, '0')}`
+  const currentTime = today.getHours() * 60 + today.getMinutes() // Current time in minutes
+  
   availableSlots.value.forEach((slot) => {
-    if (!grouped[slot.date]) {
-      grouped[slot.date] = []
+    // Check if this slot is for today
+    const isToday = slot.date === todayDateString
+    
+    if (isToday) {
+      // For today, filter out past time slots
+      const [hours, minutes] = slot.time.split(':').map(Number)
+      const slotTime = hours * 60 + (minutes || 0) // Slot time in minutes
+      
+      // Only include slots that are in the future
+      if (slotTime > currentTime) {
+        if (!grouped[slot.date]) {
+          grouped[slot.date] = []
+        }
+        grouped[slot.date].push(slot.time)
+      }
+    } else {
+      // For future dates, include all slots
+      if (!grouped[slot.date]) {
+        grouped[slot.date] = []
+      }
+      grouped[slot.date].push(slot.time)
     }
-    grouped[slot.date].push(slot.time)
   })
+  
   // Sort dates
   const sortedDates = Object.keys(grouped).sort()
   const sorted = {}
@@ -492,11 +523,24 @@ const fetchAvailableSlots = async () => {
 }
 
 const openBookingModal = () => {
+  selectedBookingDate.value = null
+  selectedBookingTime.value = null
+  isBookingModalOpen.value = true
+}
+
+const openBookingModalWithSlot = (date, time) => {
+  selectedBookingDate.value = date
+  selectedBookingTime.value = time
   isBookingModalOpen.value = true
 }
 
 const closeBookingModal = () => {
   isBookingModalOpen.value = false
+  // Reset selected date/time after a short delay to allow modal to close
+  setTimeout(() => {
+    selectedBookingDate.value = null
+    selectedBookingTime.value = null
+  }, 300)
 }
 
 const openLookupModal = () => {

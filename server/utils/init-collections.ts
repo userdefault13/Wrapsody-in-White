@@ -42,15 +42,45 @@ export async function initializeCollections() {
     
     // Create indexes for availability
     // Global schedule (type: 'schedule') should be unique
-    await availabilityCollection.createIndex({ type: 1 }, { unique: true, partialFilterExpression: { type: 'schedule' } })
+    try {
+      // Try to drop existing index if it conflicts
+      try {
+        await availabilityCollection.dropIndex('type_1')
+      } catch (e: any) {
+        // Index doesn't exist or can't be dropped, continue
+      }
+      await availabilityCollection.createIndex({ type: 1 }, { unique: true, partialFilterExpression: { type: 'schedule' } })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability type index:', e.message)
+    }
     // Worker schedules (type: 'worker_schedule') can have multiple
-    await availabilityCollection.createIndex({ type: 1, workerId: 1 })
-    await availabilityCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
-    await availabilityCollection.createIndex({ workerId: 1 })
-    await availabilityCollection.createIndex({ updatedAt: -1 })
+    try {
+      await availabilityCollection.createIndex({ type: 1, workerId: 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability type+workerId index:', e.message)
+    }
+    try {
+      await availabilityCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability id index:', e.message)
+    }
+    try {
+      await availabilityCollection.createIndex({ workerId: 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability workerId index:', e.message)
+    }
+    try {
+      await availabilityCollection.createIndex({ updatedAt: -1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability updatedAt index:', e.message)
+    }
     
     // Create index on nested availability.date field
-    await availabilityCollection.createIndex({ 'availability.date': 1 })
+    try {
+      await availabilityCollection.createIndex({ 'availability.date': 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create availability.date index:', e.message)
+    }
     
     results.availability = {
       indexes: [
@@ -248,6 +278,268 @@ export async function initializeCollections() {
     }
 
     // ============================================
+    // BOX DIMENSIONS COLLECTION
+    // ============================================
+    const boxDimensionsCollection = db.collection('boxDimensions')
+    
+    // Create indexes for box dimensions (with error handling)
+    try {
+      await boxDimensionsCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create boxDimensions id index:', e.message)
+    }
+    try {
+      await boxDimensionsCollection.createIndex({ sizeId: 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create boxDimensions sizeId index:', e.message)
+    }
+    try {
+      await boxDimensionsCollection.createIndex({ active: 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create boxDimensions active index:', e.message)
+    }
+    try {
+      await boxDimensionsCollection.createIndex({ wrappingPaperNeeded: 1 })
+    } catch (e: any) {
+      console.warn('⚠️ Could not create boxDimensions wrappingPaperNeeded index:', e.message)
+    }
+    
+    // Seed default box dimensions if collection is empty
+    const existingBoxDimensions = await boxDimensionsCollection.countDocuments()
+    if (existingBoxDimensions === 0) {
+      // Import calculation functions
+      const { calculateBoxSurfaceArea, calculateWrappingPaperNeeded } = await import('./wrapping-paper-calculator')
+      
+      // Ensure sizes exist first - if sizes collection is empty, seed them
+      const existingSizes = await sizesCollection.countDocuments()
+      if (existingSizes === 0) {
+        const defaultSizes = [
+          { id: 'size-xsmall', name: 'xsmall', displayName: 'Extra Small', order: 1, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'size-small', name: 'small', displayName: 'Small', order: 2, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'size-medium', name: 'medium', displayName: 'Medium', order: 3, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'size-large', name: 'large', displayName: 'Large', order: 4, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'size-xl', name: 'xl', displayName: 'Extra Large', order: 5, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        ]
+        await sizesCollection.insertMany(defaultSizes)
+        console.log('✅ Seeded default sizes for boxDimensions')
+      }
+      
+      // Get size IDs (now they should exist)
+      const sizes = await sizesCollection.find({ active: true }).toArray()
+      if (sizes.length === 0) {
+        console.warn('⚠️ No sizes found - cannot seed boxDimensions')
+        results.boxDimensions = {
+          indexes: [
+            'id (unique)',
+            'sizeId',
+            'active',
+            'wrappingPaperNeeded'
+          ],
+          error: 'No sizes available for seeding'
+        }
+      } else {
+        const sizeMap = new Map(sizes.map(s => [s.name, s.id]))
+      
+      // Default box dimensions for each size (multiple options per size)
+      const defaultBoxDimensions = [
+        // XSmall boxes
+        {
+          id: 'boxdim-xsmall-1',
+          sizeId: sizeMap.get('xsmall'),
+          length: 3,
+          width: 3,
+          height: 3,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-xsmall-2',
+          sizeId: sizeMap.get('xsmall'),
+          length: 4,
+          width: 3,
+          height: 2,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-xsmall-3',
+          sizeId: sizeMap.get('xsmall'),
+          length: 3.5,
+          width: 3.5,
+          height: 3.5,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        // Small boxes
+        {
+          id: 'boxdim-small-1',
+          sizeId: sizeMap.get('small'),
+          length: 4,
+          width: 4,
+          height: 4,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-small-2',
+          sizeId: sizeMap.get('small'),
+          length: 5,
+          width: 4,
+          height: 3,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-small-3',
+          sizeId: sizeMap.get('small'),
+          length: 6,
+          width: 4,
+          height: 2,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        // Medium boxes
+        {
+          id: 'boxdim-medium-1',
+          sizeId: sizeMap.get('medium'),
+          length: 6,
+          width: 6,
+          height: 6,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-medium-2',
+          sizeId: sizeMap.get('medium'),
+          length: 8,
+          width: 6,
+          height: 4,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-medium-3',
+          sizeId: sizeMap.get('medium'),
+          length: 10,
+          width: 6,
+          height: 3,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        // Large boxes
+        {
+          id: 'boxdim-large-1',
+          sizeId: sizeMap.get('large'),
+          length: 8,
+          width: 8,
+          height: 8,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-large-2',
+          sizeId: sizeMap.get('large'),
+          length: 10,
+          width: 8,
+          height: 6,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-large-3',
+          sizeId: sizeMap.get('large'),
+          length: 12,
+          width: 8,
+          height: 4,
+          wasteFactor: 0.15,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        // XL boxes
+        {
+          id: 'boxdim-xl-1',
+          sizeId: sizeMap.get('xl'),
+          length: 12,
+          width: 12,
+          height: 12,
+          wasteFactor: 0.20,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-xl-2',
+          sizeId: sizeMap.get('xl'),
+          length: 16,
+          width: 12,
+          height: 8,
+          wasteFactor: 0.20,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 'boxdim-xl-3',
+          sizeId: sizeMap.get('xl'),
+          length: 18,
+          width: 12,
+          height: 6,
+          wasteFactor: 0.20,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ]
+      
+        // Calculate surface area and wrapping paper needed for each dimension
+        for (const dim of defaultBoxDimensions) {
+          dim.surfaceArea = calculateBoxSurfaceArea(dim.length, dim.width, dim.height)
+          dim.wrappingPaperNeeded = calculateWrappingPaperNeeded(
+            dim.length,
+            dim.width,
+            dim.height,
+            dim.wasteFactor
+          )
+        }
+        
+        await boxDimensionsCollection.insertMany(defaultBoxDimensions)
+        console.log(`✅ Seeded ${defaultBoxDimensions.length} default box dimensions`)
+      }
+    }
+    
+    results.boxDimensions = {
+      indexes: [
+        'id (unique)',
+        'sizeId',
+        'active',
+        'wrappingPaperNeeded'
+      ]
+    }
+
+    // ============================================
     // WORK ORDERS COLLECTION
     // ============================================
     const workOrdersCollection = db.collection('workOrders')
@@ -331,7 +623,7 @@ export async function getCollectionStats() {
   const stats: Record<string, any> = {}
 
   try {
-    const collections = ['bookings', 'availability', 'transactions', 'users', 'pricing', 'services', 'inventory', 'workers', 'sizes', 'workOrders', 'workItems']
+    const collections = ['bookings', 'availability', 'transactions', 'users', 'pricing', 'services', 'inventory', 'workers', 'sizes', 'boxDimensions', 'workOrders', 'workItems']
     
     for (const collectionName of collections) {
       const collection = db.collection(collectionName)

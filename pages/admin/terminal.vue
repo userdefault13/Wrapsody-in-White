@@ -141,6 +141,14 @@
       @close="closeCheckInModal"
       @checked-in="handleCheckedIn"
       @payment-adjustment="handlePaymentAdjustment"
+      @show-summary="handleShowCheckInSummary"
+    />
+
+    <CheckInSummaryModal
+      :is-open="showCheckInSummaryModal"
+      :booking="selectedBookingForSummary"
+      :workers="workersMap"
+      @close="closeCheckInSummaryModal"
     />
 
     <!-- Payment Adjustment Modal -->
@@ -291,6 +299,7 @@ import { useRouter } from 'vue-router'
 import { useGraphQL } from '~/composables/useGraphQL'
 import WorkflowKanban from '~/components/WorkflowKanban.vue'
 import CheckInModal from '~/components/CheckInModal.vue'
+import CheckInSummaryModal from '~/components/CheckInSummaryModal.vue'
 import ItemDetailModal from '~/components/ItemDetailModal.vue'
 import PaymentAdjustmentModal from '~/components/PaymentAdjustmentModal.vue'
 import WrappingInstructionModal from '~/components/WrappingInstructionModal.vue'
@@ -312,6 +321,8 @@ const searchQuery = ref('')
 const selectedStage = ref('')
 const showCheckInModal = ref(false)
 const selectedBooking = ref(null)
+const showCheckInSummaryModal = ref(false)
+const selectedBookingForSummary = ref(null)
 const showItemDetail = ref(false)
 const selectedItem = ref(null)
 const showPaymentAdjustmentModal = ref(false)
@@ -553,6 +564,18 @@ const closeCheckInModal = () => {
   selectedBooking.value = null
 }
 
+const handleShowCheckInSummary = (booking) => {
+  selectedBookingForSummary.value = booking
+  showCheckInSummaryModal.value = true
+  // Close the check-in modal
+  closeCheckInModal()
+}
+
+const closeCheckInSummaryModal = () => {
+  showCheckInSummaryModal.value = false
+  selectedBookingForSummary.value = null
+}
+
 const handleCheckedIn = async () => {
   // Refresh bookings to show newly checked-in items
   await loadBookings()
@@ -700,30 +723,54 @@ const handleWrappingComplete = async (data) => {
       }
     }
 
-    // All items are 100% complete - NOW we can move this item to QA
-    // Update the current item's status to quality_check
-    try {
-      const updateMutation = `
-        mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
-          updateWorkItem(input: $input) {
-            id
-            status
-            wrappingCompletedAt
+    // All items are 100% complete - NOW we can move ALL items to QA
+    // Find all items that have 100% wrapping progress but are not yet in QA
+    const itemsToMoveToQA = allCheckedInItems.filter((i) => {
+      // Item must have 100% wrapping progress
+      if (!i.wrappingProgress || !Array.isArray(i.wrappingProgress)) return false
+      const totalSteps = i.wrappingProgress.length
+      if (totalSteps === 0) return false
+      const completedSteps = i.wrappingProgress.filter(Boolean).length
+      const is100Percent = completedSteps === totalSteps
+      
+      // Item must not already be in QA or ready
+      const notInQA = i.status !== 'quality_check' && i.status !== 'ready' && i.status !== 'picked_up'
+      
+      return is100Percent && notInQA
+    })
+    
+    if (itemsToMoveToQA.length > 0) {
+      try {
+        const updateMutation = `
+          mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
+            updateWorkItem(input: $input) {
+              id
+              status
+              wrappingCompletedAt
+            }
           }
-        }
-      `
-      
-      await executeQuery(updateMutation, {
-        input: {
-          id: item.id,
-          status: 'quality_check'
-        }
-      })
-      
-      console.log(`✅ Item ${item.id} moved to QA - all items have 100% wrapping progress`)
-    } catch (error) {
-      console.error('Error moving item to QA:', error)
-      alert('Failed to move item to quality check. Please try again.')
+        `
+        
+        // Move all items with 100% progress to QA
+        const updatePromises = itemsToMoveToQA.map((itemToUpdate) => {
+          return executeQuery(updateMutation, {
+            input: {
+              id: itemToUpdate.id,
+              status: 'quality_check'
+            }
+          })
+        })
+        
+        await Promise.all(updatePromises)
+        
+        console.log(`✅ Moved ${itemsToMoveToQA.length} item(s) to QA - all items have 100% wrapping progress`)
+        console.log(`   Items moved: ${itemsToMoveToQA.map(i => i.id).join(', ')}`)
+      } catch (error) {
+        console.error('Error moving items to QA:', error)
+        alert('Failed to move items to quality check. Please try again.')
+      }
+    } else {
+      console.log('✅ All items already in QA or ready')
     }
 
     closeWrappingInstruction()
@@ -737,10 +784,47 @@ const handleWrappingComplete = async (data) => {
 }
 
 const handleAcceptNextItem = async () => {
-  if (!nextItemModal.value.item || !wrappingWorker.value) return
+  if (!nextItemModal.value.item) return
   
   const nextItem = nextItemModal.value.item
   nextItemModal.value.show = false
+  
+  // Get or load the current worker
+  let worker = wrappingWorker.value || currentWorker.value
+  
+  // If no worker is loaded, fetch it from wallet address
+  if (!worker && walletAddress.value) {
+    try {
+      const normalizedAddress = walletAddress.value.toLowerCase()
+      const query = `
+        query GetWorker($walletAddress: String!) {
+          worker(walletAddress: $walletAddress, id: null) {
+            id
+            walletAddress
+            name
+            workerType
+          }
+        }
+      `
+      const workerData = await executeQuery(query, {
+        walletAddress: normalizedAddress
+      })
+      worker = workerData.worker
+      if (worker) {
+        currentWorker.value = worker
+        wrappingWorker.value = worker
+      }
+    } catch (error) {
+      console.error('Error loading worker:', error)
+      alert('Failed to load worker information. Please try again.')
+      return
+    }
+  }
+  
+  if (!worker) {
+    alert('Worker information not available. Please ensure you are connected.')
+    return
+  }
   
   // Assign the worker to the next item and start wrapping
   try {
@@ -760,17 +844,23 @@ const handleAcceptNextItem = async () => {
       input: {
         id: nextItem.id,
         status: 'wrapping',
-        assignedWorker: wrappingWorker.value.id
+        assignedWorker: worker.id
       }
     })
     
-    // Refresh bookings
+    console.log(`✅ Assigned worker ${worker.id} to item ${nextItem.id}`)
+    
+    // Refresh bookings to get the latest item data
     await loadBookings()
     
-    // Open wrapping modal for the next item
+    // Find the updated item from the refreshed bookings
+    const booking = bookings.value.find(b => b.id === nextItemModal.value.booking?.id)
+    const updatedItem = booking?.items?.find(i => i.id === nextItem.id)
+    
+    // Open wrapping modal for the next item with updated data
     handleStartWrapping({
-      item: nextItem,
-      worker: wrappingWorker.value
+      item: updatedItem || nextItem,
+      worker: worker
     })
   } catch (error) {
     console.error('Error accepting next item:', error)

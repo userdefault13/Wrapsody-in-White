@@ -59,7 +59,7 @@
             </div>
 
             <!-- Content -->
-            <div v-if="item" class="p-6 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div v-if="item" ref="contentContainer" class="p-6 max-h-[calc(100vh-300px)] overflow-y-auto">
               <div class="space-y-6">
                 <!-- Item Info -->
                 <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -92,6 +92,7 @@
                     <div
                       v-for="(step, index) in instructions"
                       :key="index"
+                      :ref="el => { if (el) stepRefs[index] = el }"
                       :class="[
                         'flex gap-4 p-4 rounded-lg transition-all duration-200',
                         completedSteps[index]
@@ -231,12 +232,21 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Box Dimension Selection Modal -->
+    <BoxDimensionSelectionModal
+      :is-open="showBoxDimensionModal"
+      :item="item"
+      @close="showBoxDimensionModal = false"
+      @confirm="handleBoxDimensionConfirm"
+    />
   </Teleport>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useGraphQL } from '~/composables/useGraphQL'
+import BoxDimensionSelectionModal from './BoxDimensionSelectionModal.vue'
 
 const props = defineProps({
   isOpen: {
@@ -257,9 +267,12 @@ const emit = defineEmits(['close', 'complete', 'progress-saved'])
 
 const { executeQuery } = useGraphQL()
 const saving = ref(false)
+const showBoxDimensionModal = ref(false)
 
 // Track completed steps
 const completedSteps = ref([])
+const stepRefs = ref([])
+const contentContainer = ref(null)
 
 const getItemSizeDisplay = (item) => {
   if (!item) return 'N/A'
@@ -512,10 +525,13 @@ watch(() => props.isOpen, async (isOpen) => {
     // Wait a bit more to ensure all reactive values are settled
     setTimeout(() => {
       loadProgress()
+      // Reset step refs
+      stepRefs.value = []
     }, 100)
   } else {
     // Reset when modal closes
     completedSteps.value = []
+    stepRefs.value = []
   }
 })
 
@@ -562,6 +578,34 @@ const completeStep = async (index) => {
   completedSteps.value[index] = true
   // Save to database immediately
   await saveProgressToDB()
+  
+  // Scroll to next incomplete step
+  await nextTick()
+  scrollToNextStep(index)
+}
+
+const scrollToNextStep = (currentIndex) => {
+  // Find the next incomplete step
+  const nextIndex = completedSteps.value.findIndex((completed, idx) => idx > currentIndex && !completed)
+  
+  if (nextIndex !== -1 && stepRefs.value[nextIndex] && contentContainer.value) {
+    const nextStepElement = stepRefs.value[nextIndex]
+    const container = contentContainer.value
+    
+    if (nextStepElement && container) {
+      // Wait a bit for DOM to update
+      setTimeout(() => {
+        const elementRect = nextStepElement.getBoundingClientRect()
+        const containerRect = container.getBoundingClientRect()
+        const scrollOffset = elementRect.top - containerRect.top + container.scrollTop - 20 // 20px padding
+        
+        container.scrollTo({
+          top: scrollOffset,
+          behavior: 'smooth'
+        })
+      }, 100)
+    }
+  }
 }
 
 const undoStep = async (index) => {
@@ -624,6 +668,13 @@ const handleComplete = async () => {
     return
   }
 
+  // Show box dimension selection modal first
+  showBoxDimensionModal.value = true
+}
+
+const handleBoxDimensionConfirm = async (boxDimensionData) => {
+  showBoxDimensionModal.value = false
+  
   saving.value = true
   try {
     // Save progress first (but don't change status yet - let parent check all items)
@@ -637,21 +688,27 @@ const handleComplete = async () => {
       }
     `
     
-    // Save wrapping progress but keep status as 'wrapping' for now
+    // Save wrapping progress with box dimension info but keep status as 'wrapping' for now
     // The parent will check if ALL items are 100% complete before moving to quality_check
     await executeQuery(mutation, {
       input: {
         id: props.item.id,
-        wrappingProgress: completedSteps.value
+        wrappingProgress: completedSteps.value,
+        boxDimensionId: boxDimensionData.boxDimensionId,
+        wrappingAttempts: boxDimensionData.attempts
         // Don't change status here - let parent handle it after checking all items
       }
     })
 
-    // Emit complete event with bookingId so parent can check for next items
+    // Emit complete event with bookingId and box dimension data
     // The parent will check if ALL items have 100% wrapping progress before moving to QA
     emit('complete', {
       item: props.item,
-      bookingId: props.item.bookingId
+      bookingId: props.item.bookingId,
+      boxDimensionId: boxDimensionData.boxDimensionId,
+      attempts: boxDimensionData.attempts,
+      wrappingPaperNeeded: boxDimensionData.wrappingPaperNeeded,
+      dimension: boxDimensionData.dimension
     })
     close()
   } catch (error) {

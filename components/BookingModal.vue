@@ -402,6 +402,14 @@ const props = defineProps({
   isOpen: {
     type: Boolean,
     default: false
+  },
+  initialDate: {
+    type: String,
+    default: null
+  },
+  initialTime: {
+    type: String,
+    default: null
   }
 })
 
@@ -841,11 +849,44 @@ const handleSubmit = async () => {
 }
 
 // Close on Escape key and manage body scroll
-watch(() => props.isOpen, (isOpen) => {
+watch(() => props.isOpen, async (isOpen) => {
   if (typeof window !== 'undefined') {
     if (isOpen) {
       // Lock body scroll
       document.body.style.overflow = 'hidden'
+      
+      // Set initial date and time if provided
+      if (props.initialDate) {
+        selectedDate.value = props.initialDate
+        form.value.date = props.initialDate
+        // Check availability for the initial date
+        checkingAvailability.value = true
+        try {
+          dateAvailable.value = await isDateAvailable(props.initialDate)
+          if (dateAvailable.value) {
+            // Fetch time slots for the initial date
+            loadingSlots.value = true
+            try {
+              availableTimeSlots.value = await getAvailableTimeSlots(props.initialDate)
+            } catch (error) {
+              console.error('Error fetching time slots:', error)
+              availableTimeSlots.value = []
+            } finally {
+              loadingSlots.value = false
+            }
+          }
+        } catch (error) {
+          console.error('Error checking availability:', error)
+          dateAvailable.value = false
+        } finally {
+          checkingAvailability.value = false
+        }
+      }
+      
+      if (props.initialTime && props.initialDate && dateAvailable.value) {
+        selectedTime.value = props.initialTime
+        form.value.time = props.initialTime
+      }
       
       // Reset state when opening modal
       submitting.value = false

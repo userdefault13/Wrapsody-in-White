@@ -408,6 +408,21 @@ export const resolvers = {
     }
   },
 
+  BoxDimension: {
+    size: async (parent: any) => {
+      try {
+        const db = await getDatabase()
+        if (!parent.sizeId) return null
+        
+        const size = await db.collection('sizes').findOne({ id: parent.sizeId })
+        return size
+      } catch (error: any) {
+        console.error('Error fetching size for box dimension:', error)
+        return null
+      }
+    }
+  },
+
   WorkItem: {
     bookingId: async (parent: any) => {
       // If bookingId is already set (from Booking.items resolver), return it
@@ -1069,6 +1084,39 @@ export const resolvers = {
         return size
       } catch (error: any) {
         console.error('Error fetching size:', error)
+        return null
+      }
+    },
+    
+    boxDimensions: async (_: any, args: { sizeId?: string; active?: boolean }) => {
+      try {
+        const db = await getDatabase()
+        const query: any = {}
+        
+        if (args.sizeId) query.sizeId = args.sizeId
+        if (args.active !== undefined) query.active = args.active
+        
+        const boxDimensions = await db.collection('boxDimensions')
+          .find(query)
+          .sort({ length: 1, width: 1, height: 1 })
+          .toArray()
+        
+        // Always return an array, never null
+        return boxDimensions || []
+      } catch (error: any) {
+        console.error('Error fetching box dimensions:', error)
+        // Return empty array instead of null to satisfy non-nullable schema
+        return []
+      }
+    },
+    
+    boxDimension: async (_: any, args: { id: string }) => {
+      try {
+        const db = await getDatabase()
+        const boxDimension = await db.collection('boxDimensions').findOne({ id: args.id })
+        return boxDimension
+      } catch (error: any) {
+        console.error('Error fetching box dimension:', error)
         return null
       }
     },
@@ -2026,9 +2074,28 @@ export const resolvers = {
     createInventory: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
+        const { calculateRollTotalArea, getSmallestBoxWrappingPaperNeeded } = await import('../utils/wrapping-paper-calculator')
 
         // Generate unique ID
         const inventoryId = `inv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+        const quantity = parseFloat(args.input.quantity) || 0
+        const rollLength = args.input.rollLength ? parseFloat(args.input.rollLength) : null
+        const rollWidth = args.input.rollWidth ? parseFloat(args.input.rollWidth) : null
+
+        // Calculate area for wrapping paper
+        let totalArea = null
+        let remainingArea = null
+        let minUsableArea = null
+
+        if (args.input.type === 'wrapping_paper' && rollLength && rollWidth) {
+          totalArea = calculateRollTotalArea(rollLength, rollWidth, quantity)
+          remainingArea = totalArea
+          
+          // Get minimum usable area for smallest box
+          const minUsableAreaInches = await getSmallestBoxWrappingPaperNeeded()
+          minUsableArea = minUsableAreaInches / 144 // Convert to square feet
+        }
 
         const inventory = {
           id: inventoryId,
@@ -2036,13 +2103,19 @@ export const resolvers = {
           type: args.input.type,
           size: args.input.size || null,
           cost: parseFloat(args.input.cost),
-          quantity: parseInt(args.input.quantity) || 0,
+          quantity: quantity,
           unit: args.input.unit || 'each',
+          rollLength: rollLength,
+          rollWidth: rollWidth,
+          totalArea: totalArea,
+          remainingArea: remainingArea,
+          minUsableArea: minUsableArea,
           supplier: args.input.supplier || null,
           thumbnail: args.input.thumbnail || null,
           amazonAsin: args.input.amazonAsin || null,
           amazonUrl: args.input.amazonUrl || null,
           notes: args.input.notes || null,
+          active: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
@@ -2059,6 +2132,13 @@ export const resolvers = {
       try {
         const db = await getDatabase()
         const { id, ...updateData } = args.input
+        const { calculateRollTotalArea, getSmallestBoxWrappingPaperNeeded } = await import('../utils/wrapping-paper-calculator')
+
+        // Get current inventory to preserve values
+        const current = await db.collection('inventory').findOne({ id })
+        if (!current) {
+          throw new Error('Inventory item not found')
+        }
 
         // Build update object with only provided fields
         const update: any = {
@@ -2069,13 +2149,44 @@ export const resolvers = {
         if (updateData.type !== undefined) update.type = updateData.type
         if (updateData.size !== undefined) update.size = updateData.size
         if (updateData.cost !== undefined) update.cost = parseFloat(updateData.cost)
-        if (updateData.quantity !== undefined) update.quantity = parseInt(updateData.quantity)
+        if (updateData.quantity !== undefined) update.quantity = parseFloat(updateData.quantity)
         if (updateData.unit !== undefined) update.unit = updateData.unit
         if (updateData.supplier !== undefined) update.supplier = updateData.supplier
         if (updateData.thumbnail !== undefined) update.thumbnail = updateData.thumbnail
         if (updateData.amazonAsin !== undefined) update.amazonAsin = updateData.amazonAsin
         if (updateData.amazonUrl !== undefined) update.amazonUrl = updateData.amazonUrl
         if (updateData.notes !== undefined) update.notes = updateData.notes
+        if (updateData.rollLength !== undefined) update.rollLength = parseFloat(updateData.rollLength)
+        if (updateData.rollWidth !== undefined) update.rollWidth = parseFloat(updateData.rollWidth)
+
+        // Recalculate area if wrapping paper and dimensions changed
+        const finalType = updateData.type !== undefined ? updateData.type : current.type
+        const finalQuantity = updateData.quantity !== undefined ? parseFloat(updateData.quantity) : current.quantity
+        const finalRollLength = updateData.rollLength !== undefined ? parseFloat(updateData.rollLength) : current.rollLength
+        const finalRollWidth = updateData.rollWidth !== undefined ? parseFloat(updateData.rollWidth) : current.rollWidth
+
+        if (finalType === 'wrapping_paper' && finalRollLength && finalRollWidth) {
+          // Calculate new total area
+          const newTotalArea = calculateRollTotalArea(finalRollLength, finalRollWidth, finalQuantity)
+          update.totalArea = newTotalArea
+          
+          // If remainingArea wasn't explicitly set, adjust it proportionally
+          if (updateData.remainingArea === undefined) {
+            const oldTotalArea = current.totalArea || newTotalArea
+            if (oldTotalArea > 0) {
+              const ratio = newTotalArea / oldTotalArea
+              update.remainingArea = (current.remainingArea || newTotalArea) * ratio
+            } else {
+              update.remainingArea = newTotalArea
+            }
+          } else {
+            update.remainingArea = parseFloat(updateData.remainingArea)
+          }
+          
+          // Update minUsableArea
+          const minUsableAreaInches = await getSmallestBoxWrappingPaperNeeded()
+          update.minUsableArea = minUsableAreaInches / 144 // Convert to square feet
+        }
 
         // Try to update by id field first
         let result = await db.collection('inventory').updateOne(
@@ -2568,6 +2679,108 @@ export const resolvers = {
       }
     },
     
+    createBoxDimension: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { sizeId, length, width, height, wasteFactor, active } = args.input
+        
+        const { calculateBoxSurfaceArea, calculateWrappingPaperNeeded } = await import('../utils/wrapping-paper-calculator')
+        
+        const surfaceArea = calculateBoxSurfaceArea(length, width, height)
+        const wrappingPaperNeeded = calculateWrappingPaperNeeded(
+          length,
+          width,
+          height,
+          wasteFactor || 0.15
+        )
+        
+        const boxDimensionId = `boxdim-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        
+        const boxDimension = {
+          id: boxDimensionId,
+          sizeId: sizeId,
+          length: length,
+          width: width,
+          height: height,
+          surfaceArea: surfaceArea,
+          wrappingPaperNeeded: wrappingPaperNeeded,
+          wasteFactor: wasteFactor || 0.15,
+          active: active !== undefined ? active : true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        await db.collection('boxDimensions').insertOne(boxDimension)
+        return boxDimension
+      } catch (error: any) {
+        console.error('Error in createBoxDimension resolver:', error)
+        throw new Error(`Failed to create box dimension: ${error.message}`)
+      }
+    },
+    
+    updateBoxDimension: async (_: any, args: { input: any }) => {
+      try {
+        const db = await getDatabase()
+        const { id, sizeId, length, width, height, wasteFactor, active } = args.input
+        
+        const { calculateBoxSurfaceArea, calculateWrappingPaperNeeded } = await import('../utils/wrapping-paper-calculator')
+        
+        const update: any = { updatedAt: new Date().toISOString() }
+        
+        // Get current box dimension to preserve values if not provided
+        const current = await db.collection('boxDimensions').findOne({ id })
+        if (!current) {
+          throw new Error(`Box dimension with id ${id} not found`)
+        }
+        
+        const finalLength = length !== undefined ? length : current.length
+        const finalWidth = width !== undefined ? width : current.width
+        const finalHeight = height !== undefined ? height : current.height
+        const finalWasteFactor = wasteFactor !== undefined ? wasteFactor : current.wasteFactor
+        
+        // Recalculate if dimensions or waste factor changed
+        if (length !== undefined || width !== undefined || height !== undefined || wasteFactor !== undefined) {
+          update.length = finalLength
+          update.width = finalWidth
+          update.height = finalHeight
+          update.wasteFactor = finalWasteFactor
+          update.surfaceArea = calculateBoxSurfaceArea(finalLength, finalWidth, finalHeight)
+          update.wrappingPaperNeeded = calculateWrappingPaperNeeded(
+            finalLength,
+            finalWidth,
+            finalHeight,
+            finalWasteFactor
+          )
+        }
+        
+        if (sizeId !== undefined) update.sizeId = sizeId
+        if (active !== undefined) update.active = active
+        
+        await db.collection('boxDimensions').updateOne({ id }, { $set: update })
+        const updated = await db.collection('boxDimensions').findOne({ id })
+        
+        if (!updated) {
+          throw new Error(`Box dimension with id ${id} not found`)
+        }
+        
+        return updated
+      } catch (error: any) {
+        console.error('Error in updateBoxDimension resolver:', error)
+        throw new Error(`Failed to update box dimension: ${error.message}`)
+      }
+    },
+    
+    deleteBoxDimension: async (_: any, args: { id: string }) => {
+      try {
+        const db = await getDatabase()
+        const result = await db.collection('boxDimensions').deleteOne({ id: args.id })
+        return result.deletedCount > 0
+      } catch (error: any) {
+        console.error('Error in deleteBoxDimension resolver:', error)
+        throw new Error(`Failed to delete box dimension: ${error.message}`)
+      }
+    },
+    
     createWorkOrder: async (_: any, args: { input: any }) => {
       try {
         const db = await getDatabase()
@@ -2762,6 +2975,8 @@ export const resolvers = {
         if (updates.isExpensiveElectronics !== undefined) update.isExpensiveElectronics = updates.isExpensiveElectronics
         if (updates.isLargerThanPaidSize !== undefined) update.isLargerThanPaidSize = updates.isLargerThanPaidSize
         if (updates.isSmallerThanPaidSize !== undefined) update.isSmallerThanPaidSize = updates.isSmallerThanPaidSize
+        if (updates.boxDimensionId !== undefined) update.boxDimensionId = updates.boxDimensionId
+        if (updates.wrappingAttempts !== undefined) update.wrappingAttempts = updates.wrappingAttempts
         
         if (status) {
           // Validate wrapping completion before allowing status change to quality_check
@@ -2807,6 +3022,105 @@ export const resolvers = {
             update.wrappingStartedAt = new Date().toISOString()
           } else if (status === 'quality_check' && !updates.wrappingCompletedAt) {
             update.wrappingCompletedAt = new Date().toISOString()
+            
+            // Auto-deduct wrapping paper when wrapping is completed
+            try {
+              const { getSmallestBoxWrappingPaperNeeded, squareFeetToSquareInches } = await import('../utils/wrapping-paper-calculator')
+              
+              // Get current item to check sizeId and boxDimensionId
+              const currentItem = await db.collection('workItems').findOne({ id: id })
+              if (currentItem?.sizeId) {
+                // Use selected boxDimensionId if provided, otherwise use first active one for this size
+                const boxDimensionId = updates.boxDimensionId || currentItem.boxDimensionId
+                const attempts = updates.wrappingAttempts || currentItem.wrappingAttempts || 1
+                
+                let boxDimension = null
+                if (boxDimensionId) {
+                  boxDimension = await db.collection('boxDimensions').findOne({ 
+                    id: boxDimensionId,
+                    active: true 
+                  })
+                }
+                
+                // Fallback to first active box dimension for this size if no specific one selected
+                if (!boxDimension) {
+                  boxDimension = await db.collection('boxDimensions').findOne({ 
+                    sizeId: currentItem.sizeId,
+                    active: true 
+                  })
+                }
+                
+                if (boxDimension) {
+                  // Multiply paper needed by number of attempts
+                  const paperNeeded = boxDimension.wrappingPaperNeeded * attempts // in square inches
+                  
+                  // Find available wrapping paper inventory
+                  const wrappingPaper = await db.collection('inventory').findOne({
+                    type: 'wrapping_paper',
+                    active: true
+                  })
+                  
+                  if (wrappingPaper) {
+                    // Convert paper needed to square feet if inventory is tracked in square feet
+                    const paperNeededSqFt = paperNeeded / 144 // Convert square inches to square feet
+                    const currentRemainingArea = wrappingPaper.remainingArea || 0
+                    
+                    if (currentRemainingArea >= paperNeededSqFt) {
+                      // Deduct paper
+                      const newRemainingArea = currentRemainingArea - paperNeededSqFt
+                      
+                      // Calculate new quantity based on roll dimensions
+                      let newQuantity = wrappingPaper.quantity || 0
+                      if (wrappingPaper.rollLength && wrappingPaper.rollWidth) {
+                        const areaPerRoll = wrappingPaper.rollLength * wrappingPaper.rollWidth
+                        newQuantity = Math.max(0, newRemainingArea / areaPerRoll)
+                      }
+                      
+                      await db.collection('inventory').updateOne(
+                        { id: wrappingPaper.id },
+                        {
+                          $set: {
+                            remainingArea: newRemainingArea,
+                            quantity: newQuantity,
+                            updatedAt: new Date().toISOString()
+                          }
+                        }
+                      )
+                      
+                      console.log(`📦 Deducted ${paperNeededSqFt.toFixed(2)} sqft of wrapping paper for item ${id} (size: ${boxDimension.length}x${boxDimension.width}x${boxDimension.height})`)
+                      
+                      // Check if roll is below minimum usable area
+                      const minUsableArea = await getSmallestBoxWrappingPaperNeeded()
+                      const minUsableAreaSqFt = minUsableArea / 144 // Convert to square feet
+                      
+                      if (newRemainingArea < minUsableAreaSqFt) {
+                        // Mark as low stock or update quantity to 0
+                        await db.collection('inventory').updateOne(
+                          { id: wrappingPaper.id },
+                          {
+                            $set: {
+                              quantity: 0,
+                              remainingArea: 0,
+                              updatedAt: new Date().toISOString()
+                            }
+                          }
+                        )
+                        console.log(`⚠️ Wrapping paper roll ${wrappingPaper.id} is below minimum usable area (${minUsableAreaSqFt.toFixed(2)} sqft) - set to 0`)
+                      }
+                    } else {
+                      console.warn(`⚠️ Insufficient wrapping paper: need ${paperNeededSqFt.toFixed(2)} sqft but only ${currentRemainingArea.toFixed(2)} sqft available`)
+                    }
+                  } else {
+                    console.warn(`⚠️ No wrapping paper inventory found for item ${id}`)
+                  }
+                } else {
+                  console.warn(`⚠️ No box dimension found for sizeId ${currentItem.sizeId} - cannot calculate wrapping paper needed`)
+                }
+              }
+            } catch (error: any) {
+              console.error('Error deducting wrapping paper:', error)
+              // Don't throw - allow item update to succeed even if paper deduction fails
+            }
           } else if (status === 'ready' && !updates.qualityCheckedAt) {
             update.qualityCheckedAt = new Date().toISOString()
           } else if (status === 'picked_up' && !updates.readyAt) {
@@ -2817,7 +3131,114 @@ export const resolvers = {
         
         if (assignedWorker !== undefined) update.assignedWorker = assignedWorker
         if (materialsUsed !== undefined) update.materialsUsed = materialsUsed
-        if (updates.wrappingProgress !== undefined) update.wrappingProgress = updates.wrappingProgress
+        if (updates.wrappingProgress !== undefined) {
+          update.wrappingProgress = updates.wrappingProgress
+          
+          // Check if wrapping is 100% complete and deduct wrapping paper
+          const wrappingProgress = updates.wrappingProgress
+          if (Array.isArray(wrappingProgress) && wrappingProgress.length > 0) {
+            const totalSteps = wrappingProgress.length
+            const completedSteps = wrappingProgress.filter(Boolean).length
+            const isComplete = completedSteps === totalSteps && totalSteps > 0
+            
+            // Get current item to check if paper was already deducted
+            const currentItem = await db.collection('workItems').findOne({ id: id })
+            const wasAlreadyDeducted = currentItem?.wrappingCompletedAt !== null
+            
+            // Only deduct if wrapping is complete and hasn't been deducted yet
+            if (isComplete && !wasAlreadyDeducted && currentItem?.sizeId) {
+              try {
+                const { getSmallestBoxWrappingPaperNeeded } = await import('../utils/wrapping-paper-calculator')
+                
+                // Use selected boxDimensionId if provided, otherwise use first active one for this size
+                const boxDimensionId = updates.boxDimensionId || currentItem.boxDimensionId
+                const attempts = updates.wrappingAttempts || currentItem.wrappingAttempts || 1
+                
+                let boxDimension = null
+                if (boxDimensionId) {
+                  boxDimension = await db.collection('boxDimensions').findOne({ 
+                    id: boxDimensionId,
+                    active: true 
+                  })
+                }
+                
+                // Fallback to first active box dimension for this size if no specific one selected
+                if (!boxDimension) {
+                  boxDimension = await db.collection('boxDimensions').findOne({ 
+                    sizeId: currentItem.sizeId,
+                    active: true 
+                  })
+                }
+                
+                if (boxDimension) {
+                  // Multiply paper needed by number of attempts
+                  const paperNeeded = boxDimension.wrappingPaperNeeded * attempts // in square inches
+                  const paperNeededSqFt = paperNeeded / 144 // Convert to square feet
+                  
+                  // Find available wrapping paper inventory
+                  const wrappingPaper = await db.collection('inventory').findOne({
+                    type: 'wrapping_paper',
+                    active: true
+                  })
+                  
+                  if (wrappingPaper) {
+                    const currentRemainingArea = wrappingPaper.remainingArea || 0
+                    
+                    if (currentRemainingArea >= paperNeededSqFt) {
+                      // Deduct paper
+                      const newRemainingArea = currentRemainingArea - paperNeededSqFt
+                      
+                      // Calculate new quantity based on roll dimensions
+                      let newQuantity = wrappingPaper.quantity || 0
+                      if (wrappingPaper.rollLength && wrappingPaper.rollWidth) {
+                        const areaPerRoll = wrappingPaper.rollLength * wrappingPaper.rollWidth
+                        newQuantity = Math.max(0, newRemainingArea / areaPerRoll)
+                      }
+                      
+                      await db.collection('inventory').updateOne(
+                        { id: wrappingPaper.id },
+                        {
+                          $set: {
+                            remainingArea: newRemainingArea,
+                            quantity: newQuantity,
+                            updatedAt: new Date().toISOString()
+                          }
+                        }
+                      )
+                      
+                      // Mark wrapping as completed
+                      update.wrappingCompletedAt = new Date().toISOString()
+                      
+                      console.log(`📦 Deducted ${paperNeededSqFt.toFixed(2)} sqft of wrapping paper for item ${id} (box: ${boxDimension.length}x${boxDimension.width}x${boxDimension.height}, attempts: ${attempts})`)
+                      
+                      // Check if roll is below minimum usable area
+                      const minUsableArea = await getSmallestBoxWrappingPaperNeeded()
+                      const minUsableAreaSqFt = minUsableArea / 144
+                      
+                      if (newRemainingArea < minUsableAreaSqFt) {
+                        await db.collection('inventory').updateOne(
+                          { id: wrappingPaper.id },
+                          {
+                            $set: {
+                              quantity: 0,
+                              remainingArea: 0,
+                              updatedAt: new Date().toISOString()
+                            }
+                          }
+                        )
+                        console.log(`⚠️ Wrapping paper roll ${wrappingPaper.id} is below minimum usable area - set to 0`)
+                      }
+                    } else {
+                      console.warn(`⚠️ Insufficient wrapping paper: need ${paperNeededSqFt.toFixed(2)} sqft but only ${currentRemainingArea.toFixed(2)} sqft available`)
+                    }
+                  }
+                }
+              } catch (error: any) {
+                console.error('Error deducting wrapping paper from wrappingProgress update:', error)
+              }
+            }
+          }
+        }
         if (updates.qualityCheckProgress !== undefined) {
           update.qualityCheckProgress = updates.qualityCheckProgress
           console.log(`✅ Updating qualityCheckProgress for item ${id}:`, updates.qualityCheckProgress)

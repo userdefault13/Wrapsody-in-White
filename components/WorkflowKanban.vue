@@ -1,6 +1,7 @@
 <template>
   <div class="workflow-kanban">
-    <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+    <div class="kanban-container">
+      <div class="kanban-grid">
       <!-- Pending Check-In Column -->
       <div class="kanban-column">
         <div class="column-header bg-gray-100 dark:bg-gray-900/30">
@@ -132,6 +133,7 @@
           />
         </div>
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -208,6 +210,13 @@ const calculateOrderStatus = (booking) => {
                                   itemsInQualityCheck.length === checkedInItems.length &&
                                   checkedInItems.every(item => item.status === 'quality_check')
   
+  // Track assigned items (for blue badge)
+  const itemsAssigned = checkedInItems.filter(item => item.assignedWorker)
+  const itemsAssignedCount = itemsAssigned.length
+  const allItemsAssigned = checkedInItems.length > 0 && 
+                           itemsAssigned.length === checkedInItems.length &&
+                           checkedInItems.every(item => item.assignedWorker)
+  
   // LOGGING: Debug why booking is in QA
   if (itemsInQualityCheck.length > 0) {
     console.log('🔍 [QA DEBUG] Booking being considered for QA:', {
@@ -219,6 +228,18 @@ const calculateOrderStatus = (booking) => {
       checkedInItemsCount: checkedInItems.length,
       itemsInQualityCheckCount: itemsInQualityCheck.length,
       allItemsInQualityCheck: allItemsInQualityCheck,
+      itemsAssignedCount: itemsAssignedCount,
+      allItemsAssigned: allItemsAssigned,
+      itemsAssigned: itemsAssigned.map(item => ({
+        id: item.id,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        status: item.status,
+        assignedWorker: item.assignedWorker,
+        wrappingProgress: item.wrappingProgress,
+        wrappingProgressComplete: item.wrappingProgress ? 
+          `${item.wrappingProgress.filter(Boolean).length}/${item.wrappingProgress.length}` : 'N/A'
+      })),
       itemsInQualityCheck: itemsInQualityCheck.map(item => ({
         id: item.id,
         itemNumber: item.itemNumber,
@@ -320,9 +341,47 @@ const handleGroupClick = (data) => {
 </script>
 
 <style scoped>
+.workflow-kanban {
+  @apply w-full;
+}
+
+.kanban-container {
+  @apply overflow-x-auto;
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.kanban-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.kanban-container::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-800 rounded;
+}
+
+.kanban-container::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded;
+}
+
+.kanban-container::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
+}
+
+.kanban-grid {
+  @apply flex gap-4;
+  min-width: fit-content;
+  padding-bottom: 8px; /* Space for scrollbar */
+}
+
 .kanban-column {
   @apply bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700;
   min-height: 400px;
+  min-width: 320px; /* Increased width to accommodate 3 badges */
+  width: 320px; /* Fixed width for consistent column sizing */
+  flex-shrink: 0; /* Prevent columns from shrinking */
 }
 
 .column-header {

@@ -21,21 +21,40 @@ export default defineEventHandler(async (event) => {
 
     // Clean the Stripe key - aggressively remove any invalid characters
     // Stripe keys format: sk_test_ or sk_live_ followed by alphanumeric and underscore only
-    const rawKey = String(config.stripeSecretKey || '')
+    let rawKey = String(config.stripeSecretKey || '')
+    
+    // Convert to Buffer and back to string to ensure clean encoding
+    // This removes any encoding issues or hidden characters
+    try {
+      const keyBuffer = Buffer.from(rawKey, 'utf8')
+      rawKey = keyBuffer.toString('utf8')
+    } catch (e) {
+      console.error('Error encoding Stripe key:', e)
+    }
     
     // Remove ALL whitespace, newlines, tabs, and any non-alphanumeric/underscore characters
+    // Use multiple passes to be absolutely sure
     let cleanedStripeKey = rawKey
       .trim()
-      .replace(/[\r\n\t\s]/g, '') // Remove all whitespace characters
+      .replace(/\r/g, '') // Remove carriage returns
+      .replace(/\n/g, '') // Remove newlines
+      .replace(/\t/g, '') // Remove tabs
+      .replace(/\s+/g, '') // Remove all whitespace
       .replace(/[^a-zA-Z0-9_]/g, '') // Only keep letters, numbers, and underscores
     
-    // Validate format: must start with sk_test_ or sk_live_ and contain only valid chars
+    // Final validation: must start with sk_test_ or sk_live_ and contain only valid chars
     if (!cleanedStripeKey.match(/^sk_(test|live)_[a-zA-Z0-9_]+$/)) {
+      const invalidChars = Array.from(rawKey)
+        .filter(c => !/[a-zA-Z0-9_]/.test(c) && !/\s/.test(c))
+        .map(c => `${c}(${c.charCodeAt(0)})`)
+        .slice(0, 10)
+      
       console.error('Invalid Stripe secret key format after cleaning', {
         originalLength: rawKey.length,
         cleanedLength: cleanedStripeKey.length,
         cleanedPrefix: cleanedStripeKey.substring(0, 20),
-        originalFirstChars: Array.from(rawKey.substring(0, 50)).map(c => c.charCodeAt(0))
+        originalPrefix: rawKey.substring(0, 20),
+        invalidCharsFound: invalidChars
       })
       throw createError({
         statusCode: 500,
@@ -43,11 +62,18 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // One final check - ensure no control characters remain
+    if (/[\x00-\x1F\x7F]/.test(cleanedStripeKey)) {
+      console.error('Control characters found in cleaned key')
+      cleanedStripeKey = cleanedStripeKey.replace(/[\x00-\x1F\x7F]/g, '')
+    }
+    
     console.log('Stripe key validated and cleaned:', {
       originalLength: rawKey.length,
       cleanedLength: cleanedStripeKey.length,
       keyPrefix: cleanedStripeKey.substring(0, 12) + '...',
-      isValidFormat: true
+      isValidFormat: true,
+      keyLength: cleanedStripeKey.length
     })
 
     const stripe = new Stripe(cleanedStripeKey, {

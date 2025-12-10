@@ -1096,9 +1096,18 @@ const createPaymentIntent = async () => {
       throw new Error('Failed to create payment intent')
     }
     return response.clientSecret
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error creating payment intent:', err)
-    throw new Error(err?.data?.message || err?.message || 'Failed to initialize payment. Please check your Stripe configuration.')
+    console.error('Error details:', {
+      status: err?.status,
+      statusCode: err?.statusCode,
+      data: err?.data,
+      message: err?.message,
+      response: err?.response
+    })
+    // Extract the actual error message from the response
+    const errorMessage = err?.data?.message || err?.response?._data?.message || err?.message || 'Failed to initialize payment. Please check your Stripe configuration.'
+    throw new Error(errorMessage)
   }
 }
 </script>

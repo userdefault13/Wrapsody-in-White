@@ -4,7 +4,15 @@ export default defineEventHandler(async (event) => {
   try {
     const config = useRuntimeConfig()
     
+    // Debug logging (remove sensitive data in production)
+    console.log('Stripe config check:', {
+      hasStripeSecretKey: !!config.stripeSecretKey,
+      keyPrefix: config.stripeSecretKey ? config.stripeSecretKey.substring(0, 7) : 'missing',
+      allConfigKeys: Object.keys(config)
+    })
+    
     if (!config.stripeSecretKey) {
+      console.error('STRIPE_SECRET_KEY is missing from runtime config')
       throw createError({
         statusCode: 500,
         message: 'Stripe secret key not configured. Please add STRIPE_SECRET_KEY to your .env file.'

@@ -20,34 +20,34 @@ export default defineEventHandler(async (event) => {
     }
 
     // Clean the Stripe key - aggressively remove any invalid characters
-    // Remove all whitespace, newlines, carriage returns, and any non-printable characters
+    // Stripe keys format: sk_test_ or sk_live_ followed by alphanumeric and underscore only
     const rawKey = String(config.stripeSecretKey || '')
+    
+    // Remove ALL whitespace, newlines, tabs, and any non-alphanumeric/underscore characters
     let cleanedStripeKey = rawKey
       .trim()
-      .replace(/[\r\n\t]/g, '') // Remove newlines, carriage returns, tabs
-      .replace(/\s+/g, '') // Remove all whitespace
-      .replace(/[^\x20-\x7E]/g, '') // Remove any non-printable ASCII characters
-      .replace(/[^\w\-_]/g, '') // Only allow word characters, hyphens, underscores (Stripe keys use these)
+      .replace(/[\r\n\t\s]/g, '') // Remove all whitespace characters
+      .replace(/[^a-zA-Z0-9_]/g, '') // Only keep letters, numbers, and underscores
     
-    // Additional validation: Stripe keys should only contain alphanumeric and underscore
-    // Format: sk_test_ or sk_live_ followed by alphanumeric and underscore
+    // Validate format: must start with sk_test_ or sk_live_ and contain only valid chars
     if (!cleanedStripeKey.match(/^sk_(test|live)_[a-zA-Z0-9_]+$/)) {
       console.error('Invalid Stripe secret key format after cleaning', {
         originalLength: rawKey.length,
         cleanedLength: cleanedStripeKey.length,
         cleanedPrefix: cleanedStripeKey.substring(0, 20),
-        hasInvalidChars: /[^\w\-_]/.test(rawKey)
+        originalFirstChars: Array.from(rawKey.substring(0, 50)).map(c => c.charCodeAt(0))
       })
       throw createError({
         statusCode: 500,
-        message: 'Invalid Stripe secret key format. Please check your STRIPE_SECRET_KEY environment variable.'
+        message: `Invalid Stripe secret key format. Expected format: sk_test_... or sk_live_... (got ${cleanedStripeKey.substring(0, 20)}...)`
       })
     }
     
-    console.log('Stripe key validated:', {
+    console.log('Stripe key validated and cleaned:', {
       originalLength: rawKey.length,
       cleanedLength: cleanedStripeKey.length,
-      keyPrefix: cleanedStripeKey.substring(0, 12) + '...'
+      keyPrefix: cleanedStripeKey.substring(0, 12) + '...',
+      isValidFormat: true
     })
 
     const stripe = new Stripe(cleanedStripeKey, {

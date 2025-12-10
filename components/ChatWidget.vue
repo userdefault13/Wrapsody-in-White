@@ -133,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 
 const props = defineProps({
   conversationId: {
@@ -328,6 +328,7 @@ const scrollToBottom = () => {
 }
 
 let unreadCheckInterval = null
+let messagePollInterval = null
 
 const checkForUnreadMessages = async () => {
   if (!conversationId.value) return
@@ -342,6 +343,65 @@ const checkForUnreadMessages = async () => {
   }
 }
 
+const pollForNewMessages = async () => {
+  if (!conversationId.value || !isOpen.value) return
+  
+  try {
+    const response = await $fetch(`/api/chat/conversations/${conversationId.value}/messages`)
+    if (response.success) {
+      const newMessages = response.messages || []
+      const currentMessageIds = new Set(messages.value.map(m => m.id))
+      
+      // Check if there are new messages
+      const hasNewMessages = newMessages.some(msg => !currentMessageIds.has(msg.id))
+      
+      if (hasNewMessages) {
+        // Update messages
+        messages.value = newMessages
+        
+        // Mark new admin messages as read
+        const hasNewAdminMessages = newMessages.some(msg => 
+          msg.sender === 'admin' && 
+          !msg.isRead && 
+          !currentMessageIds.has(msg.id)
+        )
+        
+        if (hasNewAdminMessages) {
+          await markConversationAsRead('customer')
+          unreadCount.value = 0
+        }
+        
+        // Scroll to bottom if there are new messages
+        await nextTick()
+        scrollToBottom()
+      }
+    }
+  } catch (error) {
+    console.error('Error polling for new messages:', error)
+  }
+}
+
+const startMessagePolling = () => {
+  // Clear existing interval if any
+  if (messagePollInterval) {
+    clearInterval(messagePollInterval)
+  }
+  
+  // Poll for new messages every 3 seconds when chat is open
+  messagePollInterval = setInterval(() => {
+    if (isOpen.value && conversationId.value) {
+      pollForNewMessages()
+    }
+  }, 3000) // Poll every 3 seconds when chat is open
+}
+
+const stopMessagePolling = () => {
+  if (messagePollInterval) {
+    clearInterval(messagePollInterval)
+    messagePollInterval = null
+  }
+}
+
 onMounted(() => {
   // Check for existing conversation in localStorage
   const storedConversationId = localStorage.getItem('chatConversationId')
@@ -349,7 +409,7 @@ onMounted(() => {
     conversationId.value = storedConversationId
     checkForUnreadMessages()
     
-    // Check for unread messages periodically
+    // Check for unread messages periodically when chat is closed
     unreadCheckInterval = setInterval(() => {
       if (!isOpen.value) {
         checkForUnreadMessages()
@@ -358,10 +418,30 @@ onMounted(() => {
   }
 })
 
+// Watch for chat open/close to start/stop polling
+watch(isOpen, (newValue) => {
+  if (newValue && conversationId.value) {
+    // Chat opened - start polling for new messages
+    startMessagePolling()
+  } else {
+    // Chat closed - stop polling
+    stopMessagePolling()
+  }
+})
+
+// Watch for conversationId changes
+watch(conversationId, (newValue) => {
+  if (newValue && isOpen.value) {
+    // Conversation ID changed and chat is open - start polling
+    startMessagePolling()
+  }
+})
+
 onBeforeUnmount(() => {
   if (unreadCheckInterval) {
     clearInterval(unreadCheckInterval)
   }
+  stopMessagePolling()
 })
 </script>
 

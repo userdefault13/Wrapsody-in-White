@@ -1113,7 +1113,9 @@ export const resolvers = {
     boxDimension: async (_: any, args: { id: string }) => {
       try {
         const db = await getDatabase()
+        console.log('boxDimension resolver: Looking for id:', args.id)
         const boxDimension = await db.collection('boxDimensions').findOne({ id: args.id })
+        console.log('boxDimension resolver: Found:', boxDimension ? 'YES' : 'NO', boxDimension ? `(${boxDimension.length}x${boxDimension.width}x${boxDimension.height})` : '')
         return boxDimension
       } catch (error: any) {
         console.error('Error fetching box dimension:', error)
@@ -2080,17 +2082,46 @@ export const resolvers = {
         const inventoryId = `inv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
         const quantity = parseFloat(args.input.quantity) || 0
-        const rollLength = args.input.rollLength ? parseFloat(args.input.rollLength) : null
-        const rollWidth = args.input.rollWidth ? parseFloat(args.input.rollWidth) : null
+        const rollLength = args.input.rollLength != null ? parseFloat(args.input.rollLength) : null
+        const rollWidth = args.input.rollWidth != null ? parseFloat(args.input.rollWidth) : null
+        console.log('📦 Creating inventory - roll dimensions:', { rollLength, rollWidth, input: args.input.rollLength, inputWidth: args.input.rollWidth })
 
         // Calculate area for wrapping paper
         let totalArea = null
         let remainingArea = null
         let minUsableArea = null
+        let rolls = null
 
-        if (args.input.type === 'wrapping_paper' && rollLength && rollWidth) {
-          totalArea = calculateRollTotalArea(rollLength, rollWidth, quantity)
-          remainingArea = totalArea
+        if (args.input.type === 'wrapping_paper') {
+          const sizePerRoll = args.input.size ? parseFloat(args.input.size) : null
+          
+          // If rolls are provided, use them; otherwise calculate from size
+          if (args.input.rolls && Array.isArray(args.input.rolls) && args.input.rolls.length > 0) {
+            rolls = args.input.rolls.map((roll: any) => ({
+              rollNumber: roll.rollNumber,
+              onHand: parseFloat(roll.onHand),
+              maxArea: parseFloat(roll.maxArea)
+            }))
+            // Calculate remainingArea from rolls
+            remainingArea = rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
+            // Calculate totalArea from rolls
+            totalArea = rolls.reduce((sum: number, roll: any) => sum + roll.maxArea, 0)
+          } else if (sizePerRoll && quantity > 0) {
+            // Initialize rolls from size and quantity
+            rolls = []
+            for (let i = 0; i < quantity; i++) {
+              rolls.push({
+                rollNumber: i + 1,
+                onHand: sizePerRoll,
+                maxArea: sizePerRoll
+              })
+            }
+            totalArea = sizePerRoll * quantity
+            remainingArea = totalArea
+          } else if (rollLength && rollWidth) {
+            totalArea = calculateRollTotalArea(rollLength, rollWidth, quantity)
+            remainingArea = totalArea
+          }
           
           // Get minimum usable area for smallest box
           const minUsableAreaInches = await getSmallestBoxWrappingPaperNeeded()
@@ -2110,6 +2141,7 @@ export const resolvers = {
           totalArea: totalArea,
           remainingArea: remainingArea,
           minUsableArea: minUsableArea,
+          rolls: rolls,
           supplier: args.input.supplier || null,
           thumbnail: args.input.thumbnail || null,
           amazonAsin: args.input.amazonAsin || null,
@@ -2156,31 +2188,87 @@ export const resolvers = {
         if (updateData.amazonAsin !== undefined) update.amazonAsin = updateData.amazonAsin
         if (updateData.amazonUrl !== undefined) update.amazonUrl = updateData.amazonUrl
         if (updateData.notes !== undefined) update.notes = updateData.notes
-        if (updateData.rollLength !== undefined) update.rollLength = parseFloat(updateData.rollLength)
-        if (updateData.rollWidth !== undefined) update.rollWidth = parseFloat(updateData.rollWidth)
+        if (updateData.rollLength !== undefined) {
+          update.rollLength = updateData.rollLength != null ? parseFloat(updateData.rollLength) : null
+        }
+        if (updateData.rollWidth !== undefined) {
+          update.rollWidth = updateData.rollWidth != null ? parseFloat(updateData.rollWidth) : null
+        }
+        console.log('📦 Updating inventory - roll dimensions:', { 
+          rollLength: update.rollLength, 
+          rollWidth: update.rollWidth,
+          inputLength: updateData.rollLength,
+          inputWidth: updateData.rollWidth
+        })
 
-        // Recalculate area if wrapping paper and dimensions changed
+        // Handle rolls for wrapping paper
         const finalType = updateData.type !== undefined ? updateData.type : current.type
         const finalQuantity = updateData.quantity !== undefined ? parseFloat(updateData.quantity) : current.quantity
+        const finalSize = updateData.size !== undefined ? updateData.size : current.size
         const finalRollLength = updateData.rollLength !== undefined ? parseFloat(updateData.rollLength) : current.rollLength
         const finalRollWidth = updateData.rollWidth !== undefined ? parseFloat(updateData.rollWidth) : current.rollWidth
 
-        if (finalType === 'wrapping_paper' && finalRollLength && finalRollWidth) {
-          // Calculate new total area
-          const newTotalArea = calculateRollTotalArea(finalRollLength, finalRollWidth, finalQuantity)
-          update.totalArea = newTotalArea
-          
-          // If remainingArea wasn't explicitly set, adjust it proportionally
-          if (updateData.remainingArea === undefined) {
-            const oldTotalArea = current.totalArea || newTotalArea
-            if (oldTotalArea > 0) {
-              const ratio = newTotalArea / oldTotalArea
-              update.remainingArea = (current.remainingArea || newTotalArea) * ratio
+        if (finalType === 'wrapping_paper') {
+          // If rolls are provided, use them
+          if (updateData.rolls !== undefined && Array.isArray(updateData.rolls) && updateData.rolls.length > 0) {
+            update.rolls = updateData.rolls.map((roll: any) => ({
+              rollNumber: roll.rollNumber,
+              onHand: parseFloat(roll.onHand),
+              maxArea: parseFloat(roll.maxArea)
+            }))
+            // Calculate remainingArea from rolls
+            update.remainingArea = update.rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
+            // Calculate totalArea from rolls
+            update.totalArea = update.rolls.reduce((sum: number, roll: any) => sum + roll.maxArea, 0)
+          } else if (finalRollLength && finalRollWidth) {
+            // Calculate new total area from dimensions
+            const newTotalArea = calculateRollTotalArea(finalRollLength, finalRollWidth, finalQuantity)
+            update.totalArea = newTotalArea
+            
+            // If remainingArea wasn't explicitly set, adjust it proportionally
+            if (updateData.remainingArea === undefined) {
+              const oldTotalArea = current.totalArea || newTotalArea
+              if (oldTotalArea > 0) {
+                const ratio = newTotalArea / oldTotalArea
+                update.remainingArea = (current.remainingArea || newTotalArea) * ratio
+              } else {
+                update.remainingArea = newTotalArea
+              }
             } else {
-              update.remainingArea = newTotalArea
+              update.remainingArea = parseFloat(updateData.remainingArea)
             }
-          } else {
-            update.remainingArea = parseFloat(updateData.remainingArea)
+          } else if (finalSize && finalQuantity > 0) {
+            // Use size per roll to calculate
+            const sizePerRoll = parseFloat(finalSize)
+            const newTotalArea = sizePerRoll * finalQuantity
+            
+            // If rolls exist, preserve them; otherwise initialize
+            if (!update.rolls && current.rolls && Array.isArray(current.rolls)) {
+              // Keep existing rolls but update maxArea if size changed
+              update.rolls = current.rolls.map((roll: any) => ({
+                ...roll,
+                maxArea: sizePerRoll
+              }))
+              update.remainingArea = update.rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
+            } else if (!update.rolls) {
+              // Initialize rolls
+              const remainingArea = updateData.remainingArea !== undefined 
+                ? parseFloat(updateData.remainingArea) 
+                : (current.remainingArea || newTotalArea)
+              const onHandPerRoll = remainingArea / finalQuantity
+              
+              update.rolls = []
+              for (let i = 0; i < finalQuantity; i++) {
+                update.rolls.push({
+                  rollNumber: i + 1,
+                  onHand: onHandPerRoll,
+                  maxArea: sizePerRoll
+                })
+              }
+              update.remainingArea = remainingArea
+            }
+            
+            update.totalArea = newTotalArea
           }
           
           // Update minUsableArea
@@ -2977,6 +3065,7 @@ export const resolvers = {
         if (updates.isSmallerThanPaidSize !== undefined) update.isSmallerThanPaidSize = updates.isSmallerThanPaidSize
         if (updates.boxDimensionId !== undefined) update.boxDimensionId = updates.boxDimensionId
         if (updates.wrappingAttempts !== undefined) update.wrappingAttempts = updates.wrappingAttempts
+        if (updates.wrappingPaperSelection !== undefined) update.wrappingPaperSelection = updates.wrappingPaperSelection
         
         if (status) {
           // Validate wrapping completion before allowing status change to quality_check

@@ -130,6 +130,7 @@ export const typeDefs = `#graphql
     wrappingProgress: [Boolean!]!
     boxDimensionId: ID
     wrappingAttempts: Int
+    wrappingPaperSelection: String
     qualityCheckedAt: String
     qualityCheckProgress: [Boolean!]!
     readyAt: String
@@ -264,6 +265,12 @@ export const typeDefs = `#graphql
     box
   }
 
+  type Roll {
+    rollNumber: Int!
+    onHand: Float!
+    maxArea: Float!
+  }
+
   type Inventory {
     id: ID!
     name: String!
@@ -277,6 +284,7 @@ export const typeDefs = `#graphql
     totalArea: Float
     remainingArea: Float
     minUsableArea: Float
+    rolls: [Roll!]
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -490,6 +498,12 @@ export const typeDefs = `#graphql
     drop_off
   }
 
+  input RollInput {
+    rollNumber: Int!
+    onHand: Float!
+    maxArea: Float!
+  }
+
   input CreateInventoryInput {
     name: String!
     type: InventoryType!
@@ -499,6 +513,7 @@ export const typeDefs = `#graphql
     unit: String
     rollLength: Float
     rollWidth: Float
+    rolls: [RollInput!]
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -516,6 +531,7 @@ export const typeDefs = `#graphql
     unit: String
     rollLength: Float
     rollWidth: Float
+    rolls: [RollInput!]
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -612,6 +628,7 @@ export const typeDefs = `#graphql
     wrappingProgress: [Boolean!]
     boxDimensionId: ID
     wrappingAttempts: Int
+    wrappingPaperSelection: String
     qualityCheckProgress: [Boolean!]
     isExpensiveElectronics: Boolean
     isLargerThanPaidSize: Boolean

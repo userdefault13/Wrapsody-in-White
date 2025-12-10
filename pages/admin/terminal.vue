@@ -455,6 +455,8 @@ const loadBookings = async () => {
               qualityCheckProgress
               qualityCheckedAt
               readyAt
+              boxDimensionId
+              wrappingPaperSelection
             }
           }
         }
@@ -639,6 +641,8 @@ const handleStartWrapping = (data) => {
   
   console.log('handleStartWrapping: Final wrappingItem value:', wrappingItem.value)
   console.log('handleStartWrapping: Final wrappingProgress:', wrappingItem.value?.wrappingProgress)
+  console.log('handleStartWrapping: boxDimensionId:', wrappingItem.value?.boxDimensionId)
+  console.log('handleStartWrapping: wrappingPaperSelection:', wrappingItem.value?.wrappingPaperSelection)
   
   wrappingWorker.value = data.worker
   showWrappingInstruction.value = true

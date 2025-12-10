@@ -121,46 +121,45 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Size</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Unit</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cost</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Supplier</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amazon</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr
                 v-for="item in filteredInventory"
                 :key="item.id"
+                @click="editItem(item)"
                 :class="[
-                  'hover:bg-gray-50 dark:hover:bg-gray-700',
+                  'hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors',
                   item.quantity === 0 ? 'bg-red-50 dark:bg-red-900/10' : item.quantity < 10 ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''
                 ]"
               >
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="flex items-center">
+                <td class="px-6 py-4 whitespace-nowrap" @click.stop>
+                  <div class="flex items-center gap-3">
                     <img
                       v-if="item.thumbnail"
                       :src="item.thumbnail"
                       :alt="item.name"
-                      class="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                      class="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700 flex-shrink-0"
                       @error="handleImageError"
                     />
                     <div
                       v-else
-                      class="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center"
+                      class="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0"
                     >
                       <svg class="w-6 h-6 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-medium text-gray-900 dark:text-white" :title="item.name">
+                        {{ item.name.length > 20 ? item.name.substring(0, 20) + '...' : item.name }}
+                      </div>
+                      <div v-if="item.notes" class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{{ item.notes }}</div>
+                    </div>
                   </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="text-sm font-medium text-gray-900 dark:text-white" :title="item.name">
-                    {{ item.name.length > 20 ? item.name.substring(0, 20) + '...' : item.name }}
-                  </div>
-                  <div v-if="item.notes" class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{{ item.notes }}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="getTypeClass(item.type)">
@@ -182,19 +181,22 @@
                   <span :class="getQuantityClass(item.quantity)">
                     {{ item.quantity }}
                   </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="text-sm text-gray-900 dark:text-white">{{ item.unit || 'each' }}</div>
+                  <div v-if="item.type === 'wrapping_paper' && item.remainingArea !== null && item.remainingArea !== undefined" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    On-hand: {{ item.remainingArea.toFixed(2) }} sqft
+                  </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="text-sm font-medium text-gray-900 dark:text-white">
                     ${{ item.cost.toFixed(2) }}
                   </div>
+                  <div v-if="item.quantity > 0" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    ${{ (item.cost / item.quantity).toFixed(2) }} each
+                  </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="text-sm text-gray-500 dark:text-gray-400">{{ item.supplier || '-' }}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-6 py-4 whitespace-nowrap" @click.stop>
                   <a
                     v-if="getAmazonUrl(item)"
                     :href="getAmazonUrl(item)"
@@ -208,22 +210,6 @@
                     View on Amazon
                   </a>
                   <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div class="flex gap-2">
-                    <button
-                      @click="editItem(item)"
-                      class="text-primary-600 dark:text-primary-400 hover:text-primary-900 dark:hover:text-primary-300"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      @click="deleteItem(item.id)"
-                      class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                    >
-                      Delete
-                    </button>
-                  </div>
                 </td>
               </tr>
             </tbody>
@@ -264,7 +250,7 @@
 
               <form @submit.prevent="saveItem" class="space-y-4">
                 <!-- Amazon URL Import -->
-                <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
                   <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                     📦 Import from Amazon URL
                   </label>
@@ -273,14 +259,14 @@
                       v-model="amazonImportUrl"
                       type="url"
                       placeholder="Paste Amazon product URL here (e.g., https://amazon.com/dp/B08XYZ1234)"
-                      class="flex-1 px-4 py-2 border border-orange-300 dark:border-orange-700 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      class="flex-1 px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       @keyup.enter="parseAmazonUrl"
                     />
                     <button
                       type="button"
                       @click="parseAmazonUrl"
                       :disabled="!amazonImportUrl || !amazonImportUrl.trim() || fetchingAmazon"
-                      class="px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold flex items-center gap-2"
+                      class="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold flex items-center gap-2"
                     >
                       <svg v-if="fetchingAmazon" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -379,6 +365,88 @@
                       required
                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
+                  </div>
+                </div>
+
+                <!-- Roll Dimensions (for wrapping paper) -->
+                <div v-if="formData.type === 'wrapping_paper'" class="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Roll Width (inches)
+                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                        (Width of each roll)
+                      </span>
+                    </label>
+                    <input
+                      v-model.number="formData.rollWidth"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="e.g., 30"
+                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Auto-filled from Amazon import
+                    </p>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Roll Length (feet)
+                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                        (Length of each roll)
+                      </span>
+                    </label>
+                    <input
+                      v-model.number="formData.rollLength"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="e.g., 8.8"
+                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Auto-filled from Amazon import
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="formData.type === 'wrapping_paper' && formData.quantity > 0" class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    On-Hand per Roll (sqft)
+                    <span class="text-xs text-gray-500 dark:text-gray-400">(remaining area for each roll)</span>
+                  </label>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="(roll, index) in rollOnHandInputs" :key="index" class="space-y-1">
+                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                        Roll {{ index + 1 }}
+                      </label>
+                      <input
+                        v-model.number="roll.onHand"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        :max="roll.maxArea"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="0.00"
+                      />
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        Max: {{ roll.maxArea.toFixed(2) }} sqft
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-center text-sm">
+                      <span class="text-gray-600 dark:text-gray-400">Total On-Hand:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">
+                        {{ totalRollOnHand.toFixed(2) }} sqft
+                      </span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm mt-1">
+                      <span class="text-gray-600 dark:text-gray-400">Total Area:</span>
+                      <span class="font-semibold text-gray-900 dark:text-white">
+                        {{ totalRollArea.toFixed(2) }} sqft
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -496,6 +564,15 @@
 
                 <div class="flex gap-4 pt-4">
                   <button
+                    v-if="editingItem"
+                    type="button"
+                    @click.stop="handleDeleteFromModal"
+                    :disabled="saving"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Delete
+                  </button>
+                  <button
                     type="button"
                     @click="closeModal"
                     class="flex-1 btn-secondary"
@@ -550,6 +627,11 @@ const formData = ref({
   cost: 0,
   quantity: 0,
   unit: 'each',
+  rollLength: null,
+  rollWidth: null,
+  remainingArea: null,
+  totalArea: null,
+  rolls: [], // Array of { rollNumber, onHand, maxArea }
   supplier: '',
   thumbnail: '',
   amazonAsin: '',
@@ -591,7 +673,7 @@ const outOfStockCount = computed(() => {
 })
 
 const totalValue = computed(() => {
-  return inventory.value.reduce((sum, item) => sum + (item.cost * item.quantity), 0)
+  return inventory.value.reduce((sum, item) => sum + item.cost, 0)
 })
 
 const getTypeLabel = (type) => {
@@ -657,6 +739,53 @@ const calculateCostPerSqft = () => {
   }
   return 0
 }
+
+// Computed property for roll on-hand inputs
+const rollOnHandInputs = computed(() => {
+  if (formData.value.type !== 'wrapping_paper' || !formData.value.quantity || formData.value.quantity <= 0) {
+    return []
+  }
+  
+  const sizePerRoll = parseFloat(formData.value.size) || 0
+  const maxArea = sizePerRoll
+  
+  // Initialize rolls array if needed
+  if (!formData.value.rolls || formData.value.rolls.length !== formData.value.quantity) {
+    const rolls = []
+    for (let i = 0; i < formData.value.quantity; i++) {
+      // If editing and roll data exists, use it; otherwise initialize
+      const existingRoll = formData.value.rolls && formData.value.rolls[i]
+      rolls.push({
+        rollNumber: i + 1,
+        onHand: existingRoll?.onHand ?? maxArea,
+        maxArea: maxArea
+      })
+    }
+    formData.value.rolls = rolls
+  } else {
+    // Update maxArea for existing rolls when size changes
+    formData.value.rolls.forEach(roll => {
+      roll.maxArea = maxArea
+    })
+  }
+  
+  return formData.value.rolls
+})
+
+const totalRollOnHand = computed(() => {
+  if (!rollOnHandInputs.value || rollOnHandInputs.value.length === 0) {
+    return formData.value.remainingArea || 0
+  }
+  return rollOnHandInputs.value.reduce((sum, roll) => sum + (roll.onHand || 0), 0)
+})
+
+const totalRollArea = computed(() => {
+  if (formData.value.type !== 'wrapping_paper' || !formData.value.size || !formData.value.quantity) {
+    return formData.value.totalArea || 0
+  }
+  const sizePerRoll = parseFloat(formData.value.size) || 0
+  return sizePerRoll * formData.value.quantity
+})
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-US', {
@@ -821,6 +950,22 @@ const parseAmazonUrl = async () => {
         } else {
           console.log('⚠️ No thumbnail found in product data')
         }
+        // Set roll dimensions if available (for wrapping paper)
+        // Set these values even if type isn't set yet - they'll be used when type is wrapping_paper
+        if (product.rollLength != null && product.rollWidth != null) {
+          formData.value.rollLength = product.rollLength
+          formData.value.rollWidth = product.rollWidth
+          console.log('✅ Set roll dimensions from Amazon:', product.rollLength, 'ft x', product.rollWidth, 'in')
+          console.log('📋 FormData roll dimensions after setting:', {
+            rollLength: formData.value.rollLength,
+            rollWidth: formData.value.rollWidth
+          })
+        } else {
+          console.log('⚠️ Roll dimensions not found in Amazon product:', {
+            rollLength: product.rollLength,
+            rollWidth: product.rollWidth
+          })
+        }
         if (product.description && !formData.value.notes) {
           formData.value.notes = product.description.substring(0, 500) // Limit to 500 chars
         }
@@ -903,6 +1048,15 @@ const fetchInventory = async () => {
           cost
           quantity
           unit
+          rollLength
+          rollWidth
+          remainingArea
+          totalArea
+          rolls {
+            rollNumber
+            onHand
+            maxArea
+          }
           supplier
           thumbnail
           amazonAsin
@@ -922,12 +1076,28 @@ const fetchInventory = async () => {
   }
 }
 
+// Helper function to format rolls for GraphQL mutation
+const formatRollsForMutation = () => {
+  if (formData.value.type !== 'wrapping_paper' || !rollOnHandInputs.value || rollOnHandInputs.value.length === 0) {
+    return 'null'
+  }
+  const rollsArray = rollOnHandInputs.value.map(roll => 
+    `{rollNumber: ${roll.rollNumber}, onHand: ${roll.onHand || 0}, maxArea: ${roll.maxArea || 0}}`
+  )
+  return `[${rollsArray.join(', ')}]`
+}
+
 const saveItem = async () => {
   try {
     saving.value = true
 
     if (editingItem.value) {
       // Update existing item
+      console.log('📝 Updating inventory with roll dimensions:', {
+        rollLength: formData.value.rollLength,
+        rollWidth: formData.value.rollWidth,
+        type: formData.value.type
+      })
       const mutation = `
         mutation {
           updateInventory(input: {
@@ -938,6 +1108,9 @@ const saveItem = async () => {
             cost: ${formData.value.cost}
             quantity: ${formData.value.quantity}
             unit: ${formData.value.unit ? `"${formData.value.unit}"` : 'null'}
+            rollLength: ${formData.value.rollLength != null ? formData.value.rollLength : 'null'}
+            rollWidth: ${formData.value.rollWidth != null ? formData.value.rollWidth : 'null'}
+            rolls: ${formData.value.type === 'wrapping_paper' ? formatRollsForMutation() : 'null'}
             supplier: ${formData.value.supplier ? `"${formData.value.supplier}"` : 'null'}
             thumbnail: ${formData.value.thumbnail ? `"${formData.value.thumbnail}"` : 'null'}
             amazonAsin: ${formData.value.amazonAsin ? `"${formData.value.amazonAsin}"` : 'null'}
@@ -951,11 +1124,20 @@ const saveItem = async () => {
             cost
             quantity
             unit
+            remainingArea
+            totalArea
+            rolls {
+              rollNumber
+              onHand
+              maxArea
+            }
             supplier
             thumbnail
             amazonAsin
             amazonUrl
             notes
+            createdAt
+            updatedAt
           }
         }
       `
@@ -971,6 +1153,9 @@ const saveItem = async () => {
             cost: ${formData.value.cost}
             quantity: ${formData.value.quantity}
             unit: ${formData.value.unit ? `"${formData.value.unit}"` : 'null'}
+            rollLength: ${formData.value.rollLength != null ? formData.value.rollLength : 'null'}
+            rollWidth: ${formData.value.rollWidth != null ? formData.value.rollWidth : 'null'}
+            rolls: ${formData.value.type === 'wrapping_paper' ? formatRollsForMutation() : 'null'}
             supplier: ${formData.value.supplier ? `"${formData.value.supplier}"` : 'null'}
             thumbnail: ${formData.value.thumbnail ? `"${formData.value.thumbnail}"` : 'null'}
             amazonAsin: ${formData.value.amazonAsin ? `"${formData.value.amazonAsin}"` : 'null'}
@@ -984,11 +1169,20 @@ const saveItem = async () => {
             cost
             quantity
             unit
+            remainingArea
+            totalArea
+            rolls {
+              rollNumber
+              onHand
+              maxArea
+            }
             supplier
             thumbnail
             amazonAsin
             amazonUrl
             notes
+            createdAt
+            updatedAt
           }
         }
       `
@@ -1007,6 +1201,32 @@ const saveItem = async () => {
 
 const editItem = (item) => {
   editingItem.value = item
+  const sizePerRoll = parseFloat(item.size) || 0
+  
+  // Initialize rolls array from existing data or create new ones
+  let rolls = []
+  if (item.rolls && Array.isArray(item.rolls) && item.rolls.length > 0) {
+    // Use existing roll data
+    rolls = item.rolls.map((roll, index) => ({
+      rollNumber: index + 1,
+      onHand: roll.onHand ?? roll.remainingArea ?? sizePerRoll,
+      maxArea: sizePerRoll
+    }))
+  } else {
+    // Create new rolls array based on quantity
+    // Distribute remainingArea evenly across rolls if available
+    const remainingArea = item.remainingArea ?? (sizePerRoll * item.quantity)
+    const onHandPerRoll = item.quantity > 0 ? remainingArea / item.quantity : sizePerRoll
+    
+    for (let i = 0; i < item.quantity; i++) {
+      rolls.push({
+        rollNumber: i + 1,
+        onHand: onHandPerRoll,
+        maxArea: sizePerRoll
+      })
+    }
+  }
+  
   formData.value = {
     name: item.name,
     type: item.type,
@@ -1014,6 +1234,11 @@ const editItem = (item) => {
     cost: item.cost,
     quantity: item.quantity,
     unit: item.unit || 'each',
+    rollLength: item.rollLength ?? null,
+    rollWidth: item.rollWidth ?? null,
+    remainingArea: item.remainingArea ?? null,
+    totalArea: item.totalArea ?? null,
+    rolls: rolls,
     supplier: item.supplier || '',
     thumbnail: item.thumbnail || '',
     amazonAsin: item.amazonAsin || '',
@@ -1036,10 +1261,21 @@ const deleteItem = async (id) => {
     `
     await executeQuery(mutation)
     await fetchInventory()
+    closeModal()
   } catch (error) {
     console.error('Error deleting inventory item:', error)
     alert('Failed to delete inventory item. Please try again.')
   }
+}
+
+const handleDeleteFromModal = async () => {
+  if (!editingItem.value) return
+  
+  if (!confirm(`Are you sure you want to delete "${editingItem.value.name}"? This action cannot be undone.`)) {
+    return
+  }
+
+  await deleteItem(editingItem.value.id)
 }
 
 const closeModal = () => {
@@ -1053,6 +1289,11 @@ const closeModal = () => {
     cost: 0,
     quantity: 0,
     unit: 'each',
+    rollLength: null,
+    rollWidth: null,
+    remainingArea: null,
+    totalArea: null,
+    rolls: [],
     supplier: '',
     thumbnail: '',
     amazonAsin: '',

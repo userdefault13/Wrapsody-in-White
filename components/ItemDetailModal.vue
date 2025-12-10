@@ -774,6 +774,8 @@ const loadItemData = async () => {
           qualityCheckProgress
           qualityCheckedAt
           readyAt
+          boxDimensionId
+          wrappingPaperSelection
         }
       }
     `

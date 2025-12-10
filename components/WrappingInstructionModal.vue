@@ -143,7 +143,7 @@
                               {{ step.description }}
                             </p>
                             <ul
-                              v-if="step.details"
+                              v-if="step.details && index !== 0"
                               :class="[
                                 'mt-2 space-y-1 text-sm',
                                 completedSteps[index]
@@ -156,6 +156,85 @@
                                 <span>{{ detail }}</span>
                               </li>
                             </ul>
+                            
+                            <!-- Step 1 Checklist for Box and Wrapping Paper -->
+                            <div v-if="index === 0" class="mt-4 space-y-3">
+                              <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <h5 class="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                                  Verify Materials Selection
+                                </h5>
+                                <div class="space-y-2">
+                                  <!-- Box Dimension Checklist Item -->
+                                  <label class="flex items-start gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      v-model="workspaceChecklist.boxSelected"
+                                      class="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                    />
+                                    <div class="flex-1">
+                                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        Correct box dimension selected
+                                      </span>
+                                      <div v-if="selectedBoxDimension" class="mt-1 flex items-center gap-2">
+                                        <span class="text-xs text-gray-600 dark:text-gray-400">
+                                          {{ selectedBoxDimension.length }} × {{ selectedBoxDimension.width }} × {{ selectedBoxDimension.height }} in
+                                          <span class="ml-2">({{ selectedBoxDimension.wrappingPaperNeeded.toFixed(1) }} sq in needed)</span>
+                                        </span>
+                                        <span v-if="item.boxDimensionId" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                                          {{ item.boxDimensionId }}
+                                        </span>
+                                      </div>
+                                      <div v-else-if="item.boxDimensionId" class="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                                        Box dimension ID: {{ item.boxDimensionId }} (loading details...)
+                                      </div>
+                                      <div v-else class="mt-1 text-xs text-red-600 dark:text-red-400">
+                                        No box dimension selected
+                                      </div>
+                                    </div>
+                                  </label>
+                                  
+                                  <!-- Wrapping Paper Roll Checklist Item -->
+                                  <label class="flex items-start gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      v-model="workspaceChecklist.wrappingPaperSelected"
+                                      class="mt-1 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                    />
+                                    <div class="flex-1">
+                                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        Correct wrapping paper roll selected
+                                      </span>
+                                      <div v-if="selectedWrappingPaper" class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                        {{ getShortInventoryName(selectedWrappingPaper.inventoryName) }} - Roll {{ selectedWrappingPaper.rollNumber }}
+                                        <span class="ml-2">({{ selectedWrappingPaper.onHand.toFixed(2) }} sqft remaining)</span>
+                                      </div>
+                                      <div v-else-if="item.wrappingPaperSelection" class="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                                        Wrapping paper: {{ item.wrappingPaperSelection }} (loading details...)
+                                      </div>
+                                      <div v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        No wrapping paper roll selected at check-in
+                                      </div>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                              
+                              <!-- Standard checklist items -->
+                              <ul
+                                v-if="step.details"
+                                :class="[
+                                  'mt-2 space-y-1 text-sm',
+                                  completedSteps[index]
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-gray-600 dark:text-gray-400'
+                                ]"
+                              >
+                                <li v-for="(detail, i) in step.details" :key="i" class="flex items-start">
+                                  <span class="mr-2">•</span>
+                                  <span>{{ detail }}</span>
+                                </li>
+                              </ul>
+                            </div>
                           </div>
                           <button
                             v-if="!completedSteps[index]"
@@ -273,6 +352,36 @@ const showBoxDimensionModal = ref(false)
 const completedSteps = ref([])
 const stepRefs = ref([])
 const contentContainer = ref(null)
+
+// Workspace checklist for step 1
+const workspaceChecklist = ref({
+  boxSelected: false,
+  wrappingPaperSelected: false
+})
+
+// Selected box dimension and wrapping paper data
+const selectedBoxDimension = ref(null)
+const selectedWrappingPaper = ref(null)
+const loadingMaterials = ref(false)
+
+const getShortInventoryName = (fullName) => {
+  if (!fullName) return ''
+  
+  // Extract the product code (usually in parentheses at the end, like "(5JXW1038)")
+  const codeMatch = fullName.match(/\(([A-Z0-9]+)\)\s*$/)
+  const productCode = codeMatch ? codeMatch[1] : null
+  
+  // Get the first part of the name (before any long descriptions)
+  // Usually the brand and main product name come first, before the first comma or long description
+  let shortName = fullName.split(',')[0].trim()
+  
+  // If there's a product code, add it in parentheses
+  if (productCode) {
+    shortName = `${shortName} (${productCode})`
+  }
+  
+  return shortName
+}
 
 const getItemSizeDisplay = (item) => {
   if (!item) return 'N/A'
@@ -517,9 +626,116 @@ const loadProgress = () => {
   }
 }
 
+// Fetch box dimension and wrapping paper data
+const loadMaterialsData = async () => {
+  console.log('loadMaterialsData: Called, props.item:', props.item)
+  if (!props.item) {
+    console.log('loadMaterialsData: Early return - no item')
+    return
+  }
+  
+  console.log('loadMaterialsData: Item data:', {
+    id: props.item.id,
+    boxDimensionId: props.item.boxDimensionId,
+    wrappingPaperSelection: props.item.wrappingPaperSelection,
+    fullItem: props.item
+  })
+  
+  loadingMaterials.value = true
+  try {
+    // Fetch box dimension if boxDimensionId exists
+    if (props.item.boxDimensionId) {
+      console.log('loadMaterialsData: Fetching box dimension:', props.item.boxDimensionId)
+      const boxDimensionQuery = `
+        query GetBoxDimension($id: ID!) {
+          boxDimension(id: $id) {
+            id
+            length
+            width
+            height
+            wrappingPaperNeeded
+          }
+        }
+      `
+      try {
+        const boxData = await executeQuery(boxDimensionQuery, { id: props.item.boxDimensionId })
+        console.log('loadMaterialsData: Box dimension query result:', boxData)
+        selectedBoxDimension.value = boxData?.boxDimension || null
+        console.log('loadMaterialsData: Box dimension loaded:', selectedBoxDimension.value)
+        if (!selectedBoxDimension.value) {
+          console.error('loadMaterialsData: Box dimension query returned null for id:', props.item.boxDimensionId)
+          console.error('loadMaterialsData: Full query response:', boxData)
+        }
+      } catch (error) {
+        console.error('loadMaterialsData: Error fetching box dimension:', error)
+        selectedBoxDimension.value = null
+      }
+    } else {
+      console.log('loadMaterialsData: No boxDimensionId found on item')
+    }
+    
+    // Fetch wrapping paper if wrappingPaperSelection exists
+    if (props.item.wrappingPaperSelection) {
+      console.log('loadMaterialsData: Fetching wrapping paper:', props.item.wrappingPaperSelection)
+      const [inventoryId, rollNumber] = props.item.wrappingPaperSelection.split(':')
+      const inventoryQuery = `
+        query GetInventory($id: ID!) {
+          inventoryItem(id: $id) {
+            id
+            name
+            rolls {
+              rollNumber
+              onHand
+              maxArea
+            }
+          }
+        }
+      `
+      try {
+        const invData = await executeQuery(inventoryQuery, { id: inventoryId })
+        console.log('loadMaterialsData: Inventory query result:', invData)
+        if (invData?.inventoryItem && invData.inventoryItem.rolls) {
+          const roll = invData.inventoryItem.rolls.find((r) => r.rollNumber === parseInt(rollNumber))
+          if (roll) {
+            selectedWrappingPaper.value = {
+              inventoryId: inventoryId,
+              inventoryName: invData.inventoryItem.name,
+              rollNumber: roll.rollNumber,
+              onHand: roll.onHand,
+              maxArea: roll.maxArea
+            }
+            console.log('loadMaterialsData: Wrapping paper loaded:', selectedWrappingPaper.value)
+          } else {
+            console.error('loadMaterialsData: Roll not found. Roll number:', rollNumber, 'Available rolls:', invData.inventoryItem.rolls)
+          }
+        } else {
+          console.error('loadMaterialsData: Inventory item or rolls not found:', invData)
+        }
+      } catch (error) {
+        console.error('loadMaterialsData: Error fetching wrapping paper:', error)
+        selectedWrappingPaper.value = null
+      }
+    } else {
+      console.log('loadMaterialsData: No wrappingPaperSelection found on item')
+    }
+  } catch (error) {
+    console.error('Error loading materials data:', error)
+  } finally {
+    loadingMaterials.value = false
+  }
+}
+
 // Watch for modal opening
 watch(() => props.isOpen, async (isOpen) => {
+  console.log('WrappingInstructionModal watch: isOpen changed to:', isOpen, 'item:', props.item)
   if (isOpen && props.item) {
+    console.log('WrappingInstructionModal watch: Calling loadMaterialsData with item:', {
+      id: props.item.id,
+      boxDimensionId: props.item.boxDimensionId,
+      wrappingPaperSelection: props.item.wrappingPaperSelection
+    })
+    // Load materials data
+    await loadMaterialsData()
     // Wait for next tick to ensure instructions are computed
     await nextTick()
     // Wait a bit more to ensure all reactive values are settled
@@ -527,11 +743,22 @@ watch(() => props.isOpen, async (isOpen) => {
       loadProgress()
       // Reset step refs
       stepRefs.value = []
+      // Reset checklist
+      workspaceChecklist.value = {
+        boxSelected: false,
+        wrappingPaperSelected: false
+      }
     }, 100)
   } else {
     // Reset when modal closes
     completedSteps.value = []
     stepRefs.value = []
+    selectedBoxDimension.value = null
+    selectedWrappingPaper.value = null
+    workspaceChecklist.value = {
+      boxSelected: false,
+      wrappingPaperSelected: false
+    }
   }
 })
 
@@ -544,6 +771,15 @@ watch(() => [props.item?.id, props.item?.wrappingProgress], async () => {
     }, 100)
   }
 }, { deep: true })
+
+// Watch for item prop changes to load materials data
+watch(() => props.item, async (newItem) => {
+  console.log('WrappingInstructionModal: Item prop changed:', newItem)
+  if (props.isOpen && newItem) {
+    console.log('WrappingInstructionModal: Item changed, calling loadMaterialsData')
+    await loadMaterialsData()
+  }
+}, { immediate: true, deep: true })
 
 // Also load progress on mount if modal is already open
 onMounted(() => {
@@ -575,6 +811,18 @@ const progressPercentage = computed(() => {
 })
 
 const completeStep = async (index) => {
+  // For step 1, require checklist items to be checked
+  if (index === 0) {
+    if (!workspaceChecklist.value.boxSelected) {
+      alert('Please verify that the correct box dimension is selected before completing this step.')
+      return
+    }
+    if (!workspaceChecklist.value.wrappingPaperSelected) {
+      alert('Please verify that the correct wrapping paper roll is selected before completing this step.')
+      return
+    }
+  }
+  
   completedSteps.value[index] = true
   // Save to database immediately
   await saveProgressToDB()

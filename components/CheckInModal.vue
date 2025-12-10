@@ -249,6 +249,36 @@
                         </p>
                       </div>
 
+                      <!-- Wrapping Paper Selection -->
+                      <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Wrapping Paper Roll
+                          <span class="text-xs text-gray-500 dark:text-gray-400">(optional - for tracking)</span>
+                        </label>
+                        <select
+                          v-model="item.wrappingPaperRollId"
+                          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Select wrapping paper roll (optional)</option>
+                          <template v-for="inventory in wrappingPaperInventory" :key="inventory.id">
+                            <optgroup :label="inventory.name">
+                              <option
+                                v-for="roll in inventory.rolls"
+                                :key="`${inventory.id}-${roll.rollNumber}`"
+                                :value="`${inventory.id}:${roll.rollNumber}`"
+                                :disabled="roll.onHand <= 0"
+                              >
+                                Roll {{ roll.rollNumber }} - {{ roll.onHand.toFixed(2) }} sqft remaining
+                                <span v-if="roll.onHand <= 0"> (Depleted)</span>
+                              </option>
+                            </optgroup>
+                          </template>
+                        </select>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Select which roll will be used for this item (helps track inventory usage)
+                        </p>
+                      </div>
+
                       <div>
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                           From
@@ -376,7 +406,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useGraphQL } from '~/composables/useGraphQL'
 import { useAuth } from '~/composables/useAuth'
 import SerialNumberScanner from './SerialNumberScanner.vue'
@@ -405,6 +435,45 @@ const selectedBooking = ref(props.booking)
 const pricingCache = ref(null)
 
 const items = ref([])
+const wrappingPaperInventory = ref([])
+const loadingWrappingPaper = ref(false)
+
+// Fetch wrapping paper inventory with rolls
+const fetchWrappingPaperInventory = async () => {
+  loadingWrappingPaper.value = true
+  try {
+    const query = `
+      query {
+        inventory(type: wrapping_paper) {
+          id
+          name
+          quantity
+          rolls {
+            rollNumber
+            onHand
+            maxArea
+          }
+        }
+      }
+    `
+    const data = await executeQuery(query)
+      wrappingPaperInventory.value = (data.inventory || []).filter(inv => 
+        inv.rolls && inv.rolls.length > 0 && inv.rolls.some(roll => roll.onHand > 0)
+      )
+  } catch (error) {
+    console.error('Error fetching wrapping paper inventory:', error)
+    wrappingPaperInventory.value = []
+  } finally {
+    loadingWrappingPaper.value = false
+  }
+}
+
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
+    // Fetch wrapping paper inventory when modal opens
+    fetchWrappingPaperInventory()
+  }
+})
 
 watch(() => props.booking, async (newBooking) => {
   selectedBooking.value = newBooking
@@ -723,6 +792,7 @@ const addItem = (defaultSize = '') => {
     size: defaultSize,
     sizeId: null, // Will be set based on size string
     boxDimensionId: null,
+    wrappingPaperRollId: null, // Format: "inventoryId:rollNumber"
     photos: [],
     serialNumber: '',
     serialNumberPhoto: '',
@@ -1036,22 +1106,30 @@ const handleCheckIn = async () => {
         }
       })
       
-      // Update the work item with boxDimensionId if selected
-      if (item.boxDimensionId && addItemResult?.addWorkItem?.id) {
+      // Update the work item with boxDimensionId and wrappingPaperSelection if selected
+      if ((item.boxDimensionId || item.wrappingPaperRollId) && addItemResult?.addWorkItem?.id) {
         const updateItemMutation = `
           mutation UpdateWorkItem($input: UpdateWorkItemInput!) {
             updateWorkItem(input: $input) {
               id
               boxDimensionId
+              wrappingPaperSelection
             }
           }
         `
         
+        const updateInput = {
+          id: addItemResult.addWorkItem.id
+        }
+        if (item.boxDimensionId) {
+          updateInput.boxDimensionId = item.boxDimensionId
+        }
+        if (item.wrappingPaperRollId) {
+          updateInput.wrappingPaperSelection = item.wrappingPaperRollId
+        }
+        
         await executeQuery(updateItemMutation, {
-          input: {
-            id: addItemResult.addWorkItem.id,
-            boxDimensionId: item.boxDimensionId
-          }
+          input: updateInput
         })
       }
     }

@@ -926,7 +926,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="css">
 /* Date input styling with custom calendar color */
 .date-input {
   --calendar-color: #5D8FB0;

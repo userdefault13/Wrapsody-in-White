@@ -599,6 +599,62 @@ export async function initializeCollections() {
     await bookingsCollection.createIndex({ currentStage: 1 })
     await bookingsCollection.createIndex({ checkedInAt: -1 })
 
+    // ============================================
+    // CONVERSATIONS COLLECTION (chatbot conversations)
+    // ============================================
+    const conversationsCollection = db.collection('conversations')
+    
+    // Create indexes for conversations
+    await conversationsCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await conversationsCollection.createIndex({ email: 1 }, { sparse: true }) // Sparse since email is optional
+    await conversationsCollection.createIndex({ status: 1 })
+    await conversationsCollection.createIndex({ assignedTo: 1 })
+    await conversationsCollection.createIndex({ lastMessageAt: -1 })
+    await conversationsCollection.createIndex({ createdAt: -1 })
+    await conversationsCollection.createIndex({ status: 1, lastMessageAt: -1 }) // Compound index
+    await conversationsCollection.createIndex({ unreadCount: 1 })
+    
+    results.conversations = {
+      indexes: [
+        'id (unique)',
+        'email (sparse)',
+        'status',
+        'assignedTo',
+        'lastMessageAt (descending)',
+        'createdAt (descending)',
+        'status + lastMessageAt (compound)',
+        'unreadCount'
+      ]
+    }
+
+    // ============================================
+    // MESSAGES COLLECTION (chatbot messages)
+    // ============================================
+    const messagesCollection = db.collection('messages')
+    
+    // Create indexes for messages
+    await messagesCollection.createIndex({ id: 1 }, { unique: true, sparse: true })
+    await messagesCollection.createIndex({ conversationId: 1 })
+    await messagesCollection.createIndex({ conversationId: 1, createdAt: -1 }) // Compound index
+    await messagesCollection.createIndex({ conversationId: 1, isRead: 1 }) // Compound index
+    await messagesCollection.createIndex({ conversationId: 1, sender: 1 }) // Compound index
+    await messagesCollection.createIndex({ sender: 1 })
+    await messagesCollection.createIndex({ createdAt: -1 })
+    await messagesCollection.createIndex({ isRead: 1 })
+    
+    results.messages = {
+      indexes: [
+        'id (unique)',
+        'conversationId',
+        'conversationId + createdAt (compound)',
+        'conversationId + isRead (compound)',
+        'conversationId + sender (compound)',
+        'sender',
+        'createdAt (descending)',
+        'isRead'
+      ]
+    }
+
     console.log('✅ Collections initialized successfully!')
     return {
       success: true,

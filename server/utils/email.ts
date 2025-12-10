@@ -524,3 +524,64 @@ export async function sendThankYouSummaryEmail(booking: {
   }
 }
 
+// Chat Notification Email
+export async function sendChatNotificationEmail(data: {
+  conversationId: string
+  customerEmail: string
+  customerName?: string
+  messagePreview: string
+}) {
+  const customerName = data.customerName || 'Customer'
+  const conversationUrl = `${process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/admin/chat/${data.conversationId}`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>New Chat Message - Last Wrap Hero</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(to bottom right, #e8f0f5, #ffffff); padding: 30px; border-radius: 10px;">
+        <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h1 style="color: #3d6280; margin-top: 0;">New Chat Message</h1>
+          <p>You have a new message from <strong>${customerName}</strong> in your chat inbox.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0; font-style: italic;">"${data.messagePreview}${data.messagePreview.length >= 150 ? '...' : ''}"</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${conversationUrl}" style="display: inline-block; background-color: #3d6280; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Conversation</a>
+          </div>
+
+          <p style="color: #666; font-size: 14px;">Conversation ID: ${data.conversationId}</p>
+        </div>
+        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
+          <p>Last Wrap Hero - Professional Gift Wrapping Services</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  try {
+    // Send to admin email (from env) - you may want to configure this separately
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.GMAIL_USER
+    if (!adminEmail) {
+      console.warn('⚠️ No admin email configured for chat notifications')
+      return { success: false, message: 'Admin email not configured' }
+    }
+
+    return await sendEmail({
+      to: adminEmail,
+      subject: `New Chat Message from ${customerName}`,
+      html,
+    })
+  } catch (error) {
+    console.error('Error sending chat notification email:', error)
+    throw error
+  }
+}
+

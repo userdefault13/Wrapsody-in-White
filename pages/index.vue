@@ -8,15 +8,15 @@
             <h1 class="text-2xl font-bold text-primary-600 dark:text-primary-400">Last Wrap Hero</h1>
           </div>
           <div class="hidden md:flex items-center space-x-8">
-            <a href="#services" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</a>
-            <a href="#pricing" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Pricing</a>
-            <a href="#about" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">About</a>
-            <a href="#contact" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Contact</a>
-            <button @click="openLookupModal" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Look Up Order</button>
+            <a href="#services" @click.prevent="scrollToSection('services')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</a>
+            <a href="#pricing" @click.prevent="scrollToSection('pricing')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Pricing</a>
+            <a href="#how-it-works" @click.prevent="scrollToSection('how-it-works')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">How it works</a>
+            <a href="#contact" @click.prevent="scrollToSection('contact')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Contact</a>
           </div>
           <div class="flex items-center gap-4">
             <DarkModeToggle />
             <button @click="openBookingModal" class="btn-primary text-sm">Book Now</button>
+            <button @click="openLookupModal" class="btn-secondary text-sm">Look Up Order</button>
           </div>
         </div>
       </div>
@@ -32,7 +32,7 @@
               <span class="text-primary-600 dark:text-primary-400">I've got you covered</span>
             </h2>
             <p class="text-xl text-gray-600 dark:text-gray-300 mb-8">
-              Your cozy neighborhood gift-wrapping rescue spot is here! Drop off, pick up later, or I'll deliver back to you. Take back time to enjoy the holiday season.
+              Your cozy neighborhood gift-wrapping rescue spot is here! Drop off, pick up later, or I'll deliver back to you, same day. Take back time to enjoy the holiday season.
             </p>
             <div class="flex flex-col sm:flex-row gap-4">
               <button @click="openBookingModal" class="btn-primary text-center">Get Started</button>
@@ -104,7 +104,7 @@
       <div class="max-w-7xl mx-auto">
         <div class="text-center mb-12">
           <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Our Services</h2>
-          <p class="text-xl text-gray-600 dark:text-gray-300">Professional wrapping for every occasion</p>
+          <p class="text-xl text-gray-600 dark:text-gray-300 mb-4">Professional wrapping for every occasion</p>
         </div>
         <div v-if="loadingServices" class="text-center py-12">
           <p class="text-gray-500 dark:text-gray-400">Loading services...</p>
@@ -121,6 +121,11 @@
             :icon="getServiceIcon(service.category)"
           />
         </div>
+      </div>
+      <div class="text-center mt-8">
+        <NuxtLink to="/services" class="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold">
+          View All Services →
+        </NuxtLink>
       </div>
     </section>
 
@@ -150,10 +155,10 @@
           />
         </div>
         <div class="mt-8 text-center">
-          <p class="text-gray-600 dark:text-gray-300 mb-4">Delivery fee: $15 (waived for orders over $50)</p>
+          <p class="text-gray-600 dark:text-gray-300 mb-4">Delivery fee: $15 (waived for orders over $75)</p>
           <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Custom tags: +$2 | Eco-friendly options available</p>
           <NuxtLink to="/services" class="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold">
-            View All Services →
+            View All Prices →
           </NuxtLink>
         </div>
       </div>
@@ -198,20 +203,117 @@
       </div>
     </section>
 
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="section-padding bg-gray-50 dark:bg-gray-900">
+      <div class="max-w-6xl mx-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-8 md:p-12 shadow-lg">
+          <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4 text-center">How it works</h2>
+          <p class="text-lg text-gray-700 dark:text-gray-300 mb-8 text-center">
+            (and why we protect our address until the last step):
+          </p>
+          
+          <!-- Visual Flow Infographic -->
+          <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 mb-12">
+            <!-- Step 1 -->
+            <div class="flex flex-col items-center flex-1 max-w-xs">
+              <div class="relative mb-4">
+                <div class="w-24 h-24 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
+                  <svg class="w-12 h-12 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-primary-600 dark:bg-primary-400 text-white flex items-center justify-center font-bold text-sm">
+                  1
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2 text-center">Order & Pay</h3>
+              <p class="text-gray-600 dark:text-gray-300 text-center text-sm">Place your order and pay upfront — that confirms you're serious.</p>
+            </div>
+
+            <!-- Arrow 1 -->
+            <div class="hidden md:block flex-shrink-0">
+              <svg class="w-8 h-8 text-primary-400 dark:text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </div>
+            <div class="md:hidden my-2">
+              <svg class="w-8 h-8 text-primary-400 dark:text-primary-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="flex flex-col items-center flex-1 max-w-xs">
+              <div class="relative mb-4">
+                <div class="w-24 h-24 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
+                  <svg class="w-12 h-12 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-primary-600 dark:bg-primary-400 text-white flex items-center justify-center font-bold text-sm">
+                  2
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2 text-center">Get Address</h3>
+              <p class="text-gray-600 dark:text-gray-300 text-center text-sm">After confirmation, we share our exact Long Beach address for drop-off/pick-up.</p>
+            </div>
+
+            <!-- Arrow 2 -->
+            <div class="hidden md:block flex-shrink-0">
+              <svg class="w-8 h-8 text-primary-400 dark:text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </div>
+            <div class="md:hidden my-2">
+              <svg class="w-8 h-8 text-primary-400 dark:text-primary-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="flex flex-col items-center flex-1 max-w-xs">
+              <div class="relative mb-4">
+                <div class="w-24 h-24 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
+                  <svg class="w-12 h-12 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-primary-600 dark:bg-primary-400 text-white flex items-center justify-center font-bold text-sm">
+                  3
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2 text-center">Appointment</h3>
+              <p class="text-gray-600 dark:text-gray-300 text-center text-sm">Everything happens by appointment — keeps the Grinches away and my wife happy.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Contact/Booking Section -->
     <section id="contact" class="section-padding bg-primary-600 dark:bg-primary-700 text-white">
       <div class="max-w-4xl mx-auto text-center">
         <h2 class="text-4xl font-bold mb-4">Ready to Get Started?</h2>
         <p class="text-xl text-primary-100 mb-8">Book your wrapping service today!</p>
-        <button @click="openBookingModal" class="btn-primary bg-white text-primary-600 hover:bg-primary-50 inline-block">
-          Book Now
-        </button>
+        <div class="flex justify-center">
+          <button @click="openBookingModal" class="btn-primary bg-white text-primary-600 hover:bg-primary-50">
+            Book Now
+          </button>
+        </div>
         <div class="mt-8 grid md:grid-cols-2 gap-6 text-left">
           <div class="bg-white/10 rounded-lg p-6 backdrop-blur-sm">
             <h3 class="font-semibold text-lg mb-2">Contact Us</h3>
             <p class="text-primary-100">Long Beach, CA</p>
-            <p class="text-primary-100">Email: hello@lastwraphero.com</p>
-            <p class="text-primary-100">Phone: (555) 123-4567</p>
+            <p class="text-primary-100">Email: lastwraphero@gmail.com</p>
+            <p class="text-primary-100 flex items-center gap-2">
+              <span>Reach out on</span>
+              <a href="https://x.com/LastWrapHero" target="_blank" rel="noopener noreferrer" class="hover:opacity-80 transition-opacity inline-flex items-center">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-label="X (formerly Twitter)">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </a>
+            </p>
           </div>
           <div class="bg-white/10 rounded-lg p-6 backdrop-blur-sm">
             <h3 class="font-semibold text-lg mb-2">Service Hours</h3>
@@ -234,17 +336,24 @@
           <div>
             <h4 class="font-semibold text-white mb-4">Quick Links</h4>
             <ul class="space-y-2">
-              <li><a href="#services" class="hover:text-white transition">Services</a></li>
-              <li><a href="#pricing" class="hover:text-white transition">Pricing</a></li>
-              <li><a href="#about" class="hover:text-white transition">About</a></li>
+              <li><NuxtLink to="/services" class="hover:text-white transition">Services</NuxtLink></li>
+              <li><NuxtLink to="/services" class="hover:text-white transition">Pricing</NuxtLink></li>
+              <li><NuxtLink to="/about" class="hover:text-white transition">About</NuxtLink></li>
             </ul>
           </div>
           <div>
             <h4 class="font-semibold text-white mb-4">Contact</h4>
             <ul class="space-y-2 text-gray-400">
               <li>Long Beach, CA</li>
-              <li>Email: hello@lastwraphero.com</li>
-              <li>Phone: (555) 123-4567</li>
+              <li>Email: lastwraphero@gmail.com</li>
+              <li class="flex items-center gap-2">
+                <span>Follow us on</span>
+                <a href="https://x.com/LastWrapHero" target="_blank" rel="noopener noreferrer" class="hover:text-white transition inline-flex items-center">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-label="X (formerly Twitter)">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -280,6 +389,9 @@
       :is-open="isLookupModalOpen"
       @close="closeLookupModal"
     />
+
+    <!-- Chat Widget -->
+    <ChatWidget />
   </div>
 </template>
 
@@ -549,6 +661,20 @@ const openLookupModal = () => {
 
 const closeLookupModal = () => {
   isLookupModalOpen.value = false
+}
+
+const scrollToSection = (sectionId) => {
+  const element = document.getElementById(sectionId)
+  if (element) {
+    const offset = 80 // Account for fixed nav height
+    const elementPosition = element.getBoundingClientRect().top
+    const offsetPosition = elementPosition + window.pageYOffset - offset
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    })
+  }
 }
 
 const router = useRouter()

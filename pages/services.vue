@@ -7,13 +7,11 @@
           <div class="flex items-center">
             <NuxtLink to="/" class="text-2xl font-bold text-primary-600 dark:text-primary-400">Last Wrap Hero</NuxtLink>
           </div>
-          <div class="hidden md:flex items-center space-x-8">
-            <NuxtLink to="/" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Home</NuxtLink>
-            <NuxtLink to="/services" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</NuxtLink>
-            <button @click="openBookingModal" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Book Now</button>
-          </div>
           <div class="flex items-center gap-4">
             <DarkModeToggle />
+            <NuxtLink to="/" class="btn-secondary text-sm">
+              ← Back to Home
+            </NuxtLink>
             <button @click="openBookingModal" class="btn-primary text-sm">Book Now</button>
           </div>
         </div>
@@ -23,9 +21,9 @@
     <!-- Hero Section -->
     <section class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary-50 to-white dark:from-gray-800 dark:to-gray-900">
       <div class="max-w-7xl mx-auto text-center">
-        <h1 class="text-5xl font-bold text-gray-900 dark:text-white mb-6">Our Services</h1>
+        <h1 class="text-5xl font-bold text-gray-900 dark:text-white mb-6">Our Services and Prices</h1>
         <p class="text-xl text-gray-600 dark:text-gray-300 mb-8">
-          Professional gift wrapping services for every occasion
+          An awesome gift wrapping services for the holiday season.
         </p>
       </div>
     </section>
@@ -139,9 +137,11 @@
       <div class="max-w-4xl mx-auto text-center">
         <h2 class="text-3xl font-bold text-white mb-4">Ready to Get Started?</h2>
         <p class="text-xl text-primary-100 mb-8">Book your wrapping service today!</p>
-        <button @click="openBookingModal" class="btn-secondary bg-white text-primary-600 hover:bg-gray-100">
-          Book Now
-        </button>
+        <div class="flex justify-center">
+          <button @click="openBookingModal" class="btn-secondary bg-white text-primary-600 hover:bg-gray-100">
+            Book Now
+          </button>
+        </div>
       </div>
     </section>
 

@@ -40,6 +40,16 @@ export default defineNuxtConfig({
         protocol: 'ws',
         host: 'localhost'
       }
+    },
+    css: {
+      devSourcemap: true
+    },
+    build: {
+      cssCodeSplit: false // Disable CSS code splitting to ensure global Tailwind CSS is included
     }
+  },
+  // Ensure CSS is properly optimized but not over-purged
+  experimental: {
+    payloadExtraction: false
   }
 })

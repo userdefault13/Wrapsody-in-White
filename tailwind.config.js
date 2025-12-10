@@ -8,6 +8,18 @@ module.exports = {
     "./plugins/**/*.{js,ts}",
     "./app.vue",
     "./error.vue",
+    "./nuxt.config.{js,ts}",
+  ],
+  // Safelist important classes that might be dynamically generated
+  safelist: [
+    'max-w-7xl',
+    'max-w-4xl',
+    'mx-auto',
+    'px-4',
+    'px-6',
+    'px-8',
+    'sm:px-6',
+    'lg:px-8',
   ],
   theme: {
     extend: {

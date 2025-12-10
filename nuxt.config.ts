@@ -45,9 +45,5 @@ export default defineNuxtConfig({
     css: {
       devSourcemap: true
     }
-  },
-  // Ensure CSS is properly extracted and not inlined
-  css: {
-    extract: true
   }
 })

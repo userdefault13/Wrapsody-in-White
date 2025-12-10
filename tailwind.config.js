@@ -12,14 +12,26 @@ module.exports = {
   ],
   // Safelist important classes that might be dynamically generated
   safelist: [
-    'max-w-7xl',
-    'max-w-4xl',
+    // Container and spacing
+    {
+      pattern: /max-w-(7xl|4xl|6xl|2xl|xl|lg|md|sm)/,
+    },
+    {
+      pattern: /(mx|px|py|pt|pb|pl|pr)-(auto|0|1|2|3|4|6|8|12|16|24)/,
+    },
+    {
+      pattern: /(sm|md|lg|xl|2xl):(px|py|mx|my)-(4|6|8|12|16)/,
+    },
+    // Common utility classes
     'mx-auto',
-    'px-4',
-    'px-6',
-    'px-8',
-    'sm:px-6',
-    'lg:px-8',
+    'container',
+    'flex',
+    'grid',
+    'hidden',
+    'block',
+    'text-center',
+    'text-left',
+    'text-right',
   ],
   theme: {
     extend: {

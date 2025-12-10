@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  css: ['~/assets/css/main.css'],
+  // CSS imported in app.vue to ensure Tailwind utilities are included globally
   postcss: {
     plugins: {
       tailwindcss: {},

@@ -263,8 +263,7 @@
                 <div class="flex gap-2">
                   <textarea
                     v-model="newMessage"
-                    @keydown.enter.exact.prevent="sendMessage"
-                    @keydown.shift.enter.exact="newMessage += '\n'"
+                    @keydown="handleKeydown"
                     placeholder="Type your message..."
                     rows="3"
                     class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none"
@@ -382,6 +381,18 @@ const selectConversation = async (conv) => {
   }
 }
 
+const handleKeydown = (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    // Use requestIdleCallback to defer execution if possible, otherwise setTimeout
+    if (window.requestIdleCallback) {
+      requestIdleCallback(() => sendMessage(), { timeout: 100 })
+    } else {
+      setTimeout(() => sendMessage(), 0)
+    }
+  }
+}
+
 const loadMessages = async () => {
   if (!selectedConversation.value) return
 
@@ -405,39 +416,71 @@ const loadMessages = async () => {
 const sendMessage = async () => {
   if (!newMessage.value.trim() || !selectedConversation.value || sending.value) return
 
+  // Get message content and clear input immediately for better UX
+  const messageContent = newMessage.value.trim()
+  newMessage.value = ''
   sending.value = true
+
+  // Optimistically add message to UI (will be replaced with server response)
+  const tempMessage = {
+    id: `temp-${Date.now()}`,
+    conversationId: selectedConversation.value.id,
+    sender: 'admin',
+    content: messageContent,
+    isRead: false,
+    createdAt: new Date().toISOString()
+  }
+  messages.value.push(tempMessage)
+  
+  // Scroll immediately for better UX
+  requestAnimationFrame(() => {
+    scrollToBottom()
+  })
+
   try {
     const response = await $fetch(`/api/chat/conversations/${selectedConversation.value.id}/messages`, {
       method: 'POST',
       body: {
-        content: newMessage.value.trim(),
+        content: messageContent,
         sender: 'admin'
       }
     })
 
     if (response.success) {
-      messages.value.push(response.message)
-      newMessage.value = ''
-      
-      // Update conversation in list
-      const convIndex = conversations.value.findIndex(c => c.id === selectedConversation.value.id)
-      if (convIndex !== -1) {
-        conversations.value[convIndex] = {
-          ...conversations.value[convIndex],
-          lastMessageAt: response.message.createdAt,
-          lastMessagePreview: response.message.content.substring(0, 100)
-        }
-        // Sort conversations by last message time
-        conversations.value.sort((a, b) => {
-          return new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
-        })
+      // Replace temp message with real message
+      const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id)
+      if (tempIndex !== -1) {
+        messages.value[tempIndex] = response.message
       }
+      
+      // Defer non-critical updates to avoid blocking UI
+      setTimeout(() => {
+        const convIndex = conversations.value.findIndex(c => c.id === selectedConversation.value.id)
+        if (convIndex !== -1) {
+          conversations.value[convIndex] = {
+            ...conversations.value[convIndex],
+            lastMessageAt: response.message.createdAt,
+            lastMessagePreview: response.message.content.substring(0, 100)
+          }
+          // Sort conversations by last message time (deferred)
+          conversations.value.sort((a, b) => {
+            return new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
+          })
+        }
+      }, 0)
 
       await nextTick()
       scrollToBottom()
     }
   } catch (error) {
     console.error('Error sending message:', error)
+    // Remove temp message on error
+    const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id)
+    if (tempIndex !== -1) {
+      messages.value.splice(tempIndex, 1)
+    }
+    // Restore message content
+    newMessage.value = messageContent
     alert(error?.data?.message || 'Failed to send message. Please try again.')
   } finally {
     sending.value = false

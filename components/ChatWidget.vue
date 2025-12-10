@@ -107,7 +107,7 @@
           <div class="flex gap-2">
             <input
               v-model="messageInput"
-              @keyup.enter="sendMessage"
+              @keydown="handleKeydown"
               type="text"
               placeholder="Type your message..."
               class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -207,11 +207,42 @@ const loadMessages = async () => {
   }
 }
 
+const handleKeydown = (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    // Use requestIdleCallback to defer execution if possible, otherwise setTimeout
+    if (window.requestIdleCallback) {
+      requestIdleCallback(() => sendMessage(), { timeout: 100 })
+    } else {
+      setTimeout(() => sendMessage(), 0)
+    }
+  }
+}
+
 const sendMessage = async () => {
   const content = messageInput.value.trim()
-  if (!content) return
+  if (!content || sending.value) return
 
+  // Clear input immediately for better UX
+  messageInput.value = ''
   sending.value = true
+
+  // Optimistically add message to UI (will be replaced with server response)
+  const tempMessage = {
+    id: `temp-${Date.now()}`,
+    conversationId: conversationId.value,
+    sender: 'customer',
+    content: content,
+    isRead: false,
+    createdAt: new Date().toISOString()
+  }
+  messages.value.push(tempMessage)
+  
+  // Scroll immediately for better UX
+  requestAnimationFrame(() => {
+    scrollToBottom()
+  })
+
   try {
     // If no conversation exists, create one first
     if (!conversationId.value) {
@@ -229,8 +260,8 @@ const sendMessage = async () => {
         localStorage.setItem('chatConversationId', conversationId.value)
         emit('conversation-created', convResponse.conversation)
         
-        // Load messages for the new conversation
-        await loadMessages()
+        // Load messages for the new conversation (async, won't block)
+        loadMessages()
       }
     }
 
@@ -244,16 +275,24 @@ const sendMessage = async () => {
     })
 
     if (msgResponse.success) {
-      // Add message to local state
-      messages.value.push(msgResponse.message)
-      messageInput.value = ''
+      // Replace temp message with real message
+      const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id)
+      if (tempIndex !== -1) {
+        messages.value[tempIndex] = msgResponse.message
+      }
 
-      // Scroll to bottom
       await nextTick()
       scrollToBottom()
     }
   } catch (error) {
     console.error('Error sending message:', error)
+    // Remove temp message on error
+    const tempIndex = messages.value.findIndex(m => m.id === tempMessage.id)
+    if (tempIndex !== -1) {
+      messages.value.splice(tempIndex, 1)
+    }
+    // Restore message content
+    messageInput.value = content
     const errorMessage = error?.data?.message || error?.message || 'Failed to send message. Please try again.'
     alert(errorMessage)
   } finally {

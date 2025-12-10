@@ -1096,7 +1096,7 @@ const createPaymentIntent = async () => {
       throw new Error('Failed to create payment intent')
     }
     return response.clientSecret
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error creating payment intent:', err)
     console.error('Error details:', {
       status: err?.status,

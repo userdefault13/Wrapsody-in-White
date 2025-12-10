@@ -5,7 +5,7 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
-            <NuxtLink to="/" class="text-2xl font-bold text-primary-600 dark:text-primary-400">Last Wrap Hero</NuxtLink>
+            <Logo :show-text="true" />
           </div>
           <div class="flex items-center gap-4">
             <DarkModeToggle />
@@ -159,6 +159,7 @@ import { ref, onMounted } from 'vue'
 import BookingModal from '~/components/BookingModal.vue'
 import DarkModeToggle from '~/components/DarkModeToggle.vue'
 import { useGraphQL } from '~/composables/useGraphQL'
+import Logo from '~/components/Logo.vue'
 
 // SEO
 useHead({

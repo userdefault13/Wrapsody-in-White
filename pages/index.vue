@@ -5,7 +5,7 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
-            <h1 class="text-2xl font-bold text-primary-600 dark:text-primary-400">Last Wrap Hero</h1>
+            <Logo :show-text="true" />
           </div>
           <div class="hidden md:flex items-center space-x-8">
             <a href="#services" @click.prevent="scrollToSection('services')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</a>
@@ -330,8 +330,8 @@
       <div class="max-w-7xl mx-auto">
         <div class="grid md:grid-cols-3 gap-8 mb-8">
           <div>
-            <h3 class="text-2xl font-bold text-white mb-4">Last Wrap Hero</h3>
-            <p class="text-gray-400">Your cozy neighborhood gift-wrapping rescue spot</p>
+            <Logo size="lg" :show-text="false" />
+            <p class="text-gray-400 mt-4">Your cozy neighborhood gift-wrapping rescue spot</p>
           </div>
           <div>
             <h4 class="font-semibold text-white mb-4">Quick Links</h4>
@@ -400,6 +400,14 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGraphQL } from '~/composables/useGraphQL'
 import ChristmasCountdown from '~/components/ChristmasCountdown.vue'
+import BookingModal from '~/components/BookingModal.vue'
+import PaymentModal from '~/components/PaymentModal.vue'
+import LookupOrderModal from '~/components/LookupOrderModal.vue'
+import DarkModeToggle from '~/components/DarkModeToggle.vue'
+import ServiceCard from '~/components/ServiceCard.vue'
+import PricingCard from '~/components/PricingCard.vue'
+import ChatWidget from '~/components/ChatWidget.vue'
+import Logo from '~/components/Logo.vue'
 
 // SEO
 useHead({

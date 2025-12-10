@@ -19,7 +19,18 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const stripe = new Stripe(config.stripeSecretKey, {
+    // Clean the Stripe key - remove any whitespace, newlines, or invalid characters
+    const cleanedStripeKey = String(config.stripeSecretKey).trim().replace(/[\r\n]/g, '')
+    
+    if (!cleanedStripeKey || !cleanedStripeKey.startsWith('sk_')) {
+      console.error('Invalid Stripe secret key format')
+      throw createError({
+        statusCode: 500,
+        message: 'Invalid Stripe secret key format. Key must start with sk_test_ or sk_live_'
+      })
+    }
+
+    const stripe = new Stripe(cleanedStripeKey, {
       // Use default API version for better compatibility
       maxNetworkRetries: 2,
     })

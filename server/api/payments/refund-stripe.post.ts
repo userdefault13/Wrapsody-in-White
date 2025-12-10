@@ -57,8 +57,12 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Clean the Stripe key - remove any whitespace, newlines, or invalid characters
-    const cleanedStripeKey = String(config.stripeSecretKey).trim().replace(/[\r\n]/g, '')
+    // Clean the Stripe key - aggressively remove any invalid characters
+    let cleanedStripeKey = String(config.stripeSecretKey)
+      .trim()
+      .replace(/[\r\n\t]/g, '') // Remove newlines, carriage returns, tabs
+      .replace(/\s+/g, '') // Remove all whitespace
+      .replace(/[^\x20-\x7E]/g, '') // Remove any non-printable ASCII characters
     
     if (!cleanedStripeKey || !cleanedStripeKey.startsWith('sk_')) {
       throw createError({

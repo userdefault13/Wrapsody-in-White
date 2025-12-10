@@ -19,8 +19,19 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Clean the Stripe key - remove any whitespace, newlines, or invalid characters
-    const cleanedStripeKey = String(config.stripeSecretKey).trim().replace(/[\r\n]/g, '')
+    // Clean the Stripe key - aggressively remove any invalid characters
+    // Remove all whitespace, newlines, carriage returns, and any non-printable characters
+    let cleanedStripeKey = String(config.stripeSecretKey)
+      .trim()
+      .replace(/[\r\n\t]/g, '') // Remove newlines, carriage returns, tabs
+      .replace(/\s+/g, '') // Remove all whitespace
+      .replace(/[^\x20-\x7E]/g, '') // Remove any non-printable ASCII characters
+    
+    console.log('Stripe key cleaned:', {
+      originalLength: String(config.stripeSecretKey).length,
+      cleanedLength: cleanedStripeKey.length,
+      startsWithSk: cleanedStripeKey.startsWith('sk_')
+    })
     
     if (!cleanedStripeKey || !cleanedStripeKey.startsWith('sk_')) {
       console.error('Invalid Stripe secret key format')

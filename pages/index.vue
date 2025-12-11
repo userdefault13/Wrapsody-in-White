@@ -331,7 +331,7 @@
         <div class="grid md:grid-cols-3 gap-8 mb-8">
           <div>
             <Logo size="lg" :show-text="false" />
-            <p class="text-gray-400 mt-4">Your cozy neighborhood gift-wrapping rescue spot</p>
+            <p class="text-gray-400 mt-4 ">Your cozy neighborhood<br>gift-wrapping rescue spot</p>
           </div>
           <div>
             <h4 class="font-semibold text-white mb-4">Quick Links</h4>

@@ -10,6 +10,7 @@
           <div class="hidden md:flex items-center space-x-8">
             <a href="#services" @click.prevent="scrollToSection('services')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Services</a>
             <a href="#pricing" @click.prevent="scrollToSection('pricing')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Pricing</a>
+            <NuxtLink to="/gallery" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Gallery</NuxtLink>
             <a href="#how-it-works" @click.prevent="scrollToSection('how-it-works')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">How it works</a>
             <a href="#contact" @click.prevent="scrollToSection('contact')" class="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition">Contact</a>
           </div>
@@ -338,6 +339,7 @@
             <ul class="space-y-2">
               <li><NuxtLink to="/services" class="hover:text-white transition">Services</NuxtLink></li>
               <li><NuxtLink to="/services" class="hover:text-white transition">Pricing</NuxtLink></li>
+              <li><NuxtLink to="/gallery" class="hover:text-white transition">Gallery</NuxtLink></li>
               <li><NuxtLink to="/about" class="hover:text-white transition">About</NuxtLink></li>
             </ul>
           </div>

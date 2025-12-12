@@ -61,10 +61,55 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Try Ollama parser service if configured
+    // Only try if OLLAMA_PARSER_URL is explicitly set (not just defaulting)
+    const ollamaParserUrl = process.env.OLLAMA_PARSER_URL
+    if (ollamaParserUrl && ollamaParserUrl.trim() !== '') {
+      try {
+        console.log('🤖 Attempting to use Ollama parser service:', ollamaParserUrl)
+        const ollamaResponse = await fetch(`${ollamaParserUrl}/parse`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url, asin }),
+          signal: AbortSignal.timeout(120000) // 2 minute timeout (Ollama can take longer)
+        })
+
+        if (ollamaResponse.ok) {
+          const ollamaResult = await ollamaResponse.json()
+          if (ollamaResult.success && ollamaResult.data) {
+            console.log('✅ Successfully parsed with Ollama parser')
+            console.log('📦 Parsed fields:', {
+              asin: ollamaResult.data.asin,
+              type: ollamaResult.data.type,
+              title: ollamaResult.data.title ? ollamaResult.data.title.substring(0, 50) + '...' : null,
+              hasPrintNames: ollamaResult.data.printNames && ollamaResult.data.printNames.length > 0,
+              printNamesCount: ollamaResult.data.printNames?.length || 0,
+              hasRolls: ollamaResult.data.rolls && ollamaResult.data.rolls.length > 0,
+              rollsCount: ollamaResult.data.rolls?.length || 0
+            })
+            // Return the Ollama parser result directly - it matches our schema
+            return ollamaResult
+          } else {
+            console.log('⚠️ Ollama parser returned success=false:', ollamaResult.error || 'Unknown error')
+          }
+        } else {
+          const errorText = await ollamaResponse.text().catch(() => '')
+          console.log(`⚠️ Ollama parser returned non-OK status: ${ollamaResponse.status}`, errorText.substring(0, 200))
+        }
+      } catch (ollamaError: any) {
+        // Log error but continue to fallback
+        console.log('⚠️ Ollama parser service unavailable, falling back to regex parser:', ollamaError.message)
+        // Continue to fallback regex parsing below
+      }
+    }
+
     // Try to fetch product page HTML to extract details
     // Note: Amazon may block direct scraping, so this is a fallback approach
     let productData = {
       asin: productAsin,
+      type: null, // Inventory type: wrapping_paper, ribbon, box, tag, bow
       title: null,
       price: null,
       brand: null,
@@ -107,6 +152,25 @@ export default defineEventHandler(async (event) => {
                           html.match(/<h1[^>]*class="a-size-large[^>]*>([^<]+)<\/h1>/i)
         if (titleMatch && titleMatch[1]) {
           productData.title = titleMatch[1].trim()
+          
+          // Auto-detect type from title
+          const titleLower = productData.title.toLowerCase()
+          if (titleLower.includes('tag') || titleLower.includes('gift tag') || titleLower.includes('sticker')) {
+            productData.type = 'tag'
+            console.log('✅ Auto-detected type: tag')
+          } else if (titleLower.includes('box') && !titleLower.includes('gift box') && !titleLower.includes('wrapping')) {
+            productData.type = 'box'
+            console.log('✅ Auto-detected type: box')
+          } else if (titleLower.includes('ribbon')) {
+            productData.type = 'ribbon'
+            console.log('✅ Auto-detected type: ribbon')
+          } else if (titleLower.includes('wrapping') || titleLower.includes('wrap') || titleLower.includes('paper')) {
+            productData.type = 'wrapping_paper'
+            console.log('✅ Auto-detected type: wrapping_paper')
+          } else if (titleLower.includes('bow')) {
+            productData.type = 'bow'
+            console.log('✅ Auto-detected type: bow')
+          }
         }
 
         // Extract price - try multiple patterns to find the actual product price
@@ -171,39 +235,240 @@ export default defineEventHandler(async (event) => {
           }
         }
 
-        // Extract quantity/pack count (look for patterns like "4 count", "Pack of 4", "4-Pack")
-        // Try multiple patterns to catch different formats
-        const quantityPatterns = [
-          /(?:pack\s*of|count|quantity)[^>]*>.*?(\d+)/gi,
-          /(\d+)[\s-]*(?:pack|count|ct)/gi,
-          /(\d+)\s*(?:count|pack)/gi,
-          /pack\s*of\s*(\d+)/gi,
-          /(\d+)[\s-]*pack/gi
+        // Extract quantity/pack count - enhanced for boxes and other items
+        // First, try to find "Number of Items" in Product Details table
+        if (productDetailsTableMatch) {
+          const tableHtml = productDetailsTableMatch[1]
+          
+          // Look for Number of Items row
+          const numberItemsPatterns = [
+            /<tr[^>]*>[\s\S]{0,500}Number\s+of\s+Items?[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /<tr[^>]*>[\s\S]{0,500}Number\s+of\s+Items?[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /Number\s+of\s+Items?[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+          ]
+          
+          for (const pattern of numberItemsPatterns) {
+            const numberItemsMatch = tableHtml.match(pattern)
+            if (numberItemsMatch && numberItemsMatch[1]) {
+              const itemsText = numberItemsMatch[1]
+              // Extract number from text like "30" or "30.0 Count"
+              const numberMatch = itemsText.match(/(\d+\.?\d*)/)
+              if (numberMatch) {
+                const quantity = parseFloat(numberMatch[1])
+                if (!isNaN(quantity) && quantity > 0) {
+                  productData.quantity = Math.floor(quantity) // Use integer for quantity
+                  console.log('✅ Extracted quantity from Number of Items:', productData.quantity)
+                  break
+                }
+              }
+            }
+          }
+          
+          // Also try Unit Count
+          if (!productData.quantity) {
+            const unitCountPatterns = [
+              /<tr[^>]*>[\s\S]{0,500}Unit\s+Count[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+              /<tr[^>]*>[\s\S]{0,500}Unit\s+Count[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+              /Unit\s+Count[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+            ]
+            
+            for (const pattern of unitCountPatterns) {
+              const unitCountMatch = tableHtml.match(pattern)
+              if (unitCountMatch && unitCountMatch[1]) {
+                const countText = unitCountMatch[1]
+                const numberMatch = countText.match(/(\d+\.?\d*)/)
+                if (numberMatch) {
+                  const quantity = parseFloat(numberMatch[1])
+                  if (!isNaN(quantity) && quantity > 0) {
+                    productData.quantity = Math.floor(quantity)
+                    console.log('✅ Extracted quantity from Unit Count:', productData.quantity)
+                    break
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // Fallback: look for patterns like "4 count", "Pack of 4", "4-Pack", "30 pack"
+        if (!productData.quantity) {
+          const quantityPatterns = [
+            /(?:pack\s*of|count|quantity)[^>]*>.*?(\d+)/gi,
+            /(\d+)[\s-]*(?:pack|count|ct)/gi,
+            /(\d+)\s*(?:count|pack)/gi,
+            /pack\s*of\s*(\d+)/gi,
+            /(\d+)[\s-]*pack/gi,
+            /(\d+)\s*pack/gi, // "30 pack" format
+          ]
+          
+          for (const pattern of quantityPatterns) {
+            const matches = [...html.matchAll(pattern)]
+            if (matches.length > 0) {
+              // Take the first match
+              const quantity = parseInt(matches[0][1])
+              if (!isNaN(quantity) && quantity > 0 && quantity < 10000) { // Reasonable limit
+                productData.quantity = quantity
+                console.log('✅ Extracted quantity (fallback):', productData.quantity)
+                break
+              }
+            }
+          }
+        }
+
+        // Extract brand - try multiple patterns
+        const brandPatterns = [
+          /<a[^>]*class="[^"]*brand[^"]*"[^>]*>([^<]+)<\/a>/i,
+          /<tr[^>]*>[\s\S]{0,500}Brand[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+          /<tr[^>]*>[\s\S]{0,500}Brand[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+          /Brand[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+          /"brand":\s*"([^"]+)"/i,
+          /brand[^>]*>([^<]+)</i
         ]
         
-        for (const pattern of quantityPatterns) {
-          const matches = [...html.matchAll(pattern)]
-          if (matches.length > 0) {
-            // Take the first match
-            const quantity = parseInt(matches[0][1])
-            if (!isNaN(quantity) && quantity > 0) {
-              productData.quantity = quantity
+        for (const pattern of brandPatterns) {
+          const brandMatch = html.match(pattern)
+          if (brandMatch && brandMatch[1]) {
+            let brand = brandMatch[1].trim()
+            // Clean up HTML tags if present
+            brand = brand.replace(/<[^>]+>/g, '').trim()
+            if (brand && brand.length > 0 && brand.length < 100) {
+              productData.brand = brand
+              console.log('✅ Extracted brand:', brand)
               break
             }
           }
         }
 
-        // Extract brand
-        const brandMatch = html.match(/<a[^>]*class="[^"]*brand[^"]*"[^>]*>([^<]+)<\/a>/i) ||
-                          html.match(/brand[^>]*>([^<]+)</i)
-        if (brandMatch && brandMatch[1]) {
-          productData.brand = brandMatch[1].trim()
+        // Extract dimensions (for boxes) - enhanced parsing
+        // Look in Product Details table first
+        const productDetailsTableMatch = html.match(/<table[^>]*id="productDetails[^>]*>([\s\S]{0,15000})<\/table>/i)
+        if (productDetailsTableMatch) {
+          const tableHtml = productDetailsTableMatch[1]
+          
+          // Look for Product Dimensions row
+          const dimensionRowPatterns = [
+            /<tr[^>]*>[\s\S]{0,500}Product\s+Dimensions?[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /<tr[^>]*>[\s\S]{0,500}Product\s+Dimensions?[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /Product\s+Dimensions?[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+          ]
+          
+          for (const pattern of dimensionRowPatterns) {
+            const dimensionRowMatch = tableHtml.match(pattern)
+            if (dimensionRowMatch && dimensionRowMatch[1]) {
+              const dimensionText = dimensionRowMatch[1]
+              console.log('📦 Found Product Dimensions row:', dimensionText.substring(0, 200))
+              
+              // Try multiple dimension patterns
+              const dimensionPatterns = [
+                // Pattern 1: "12 x 12 x 6 inches" or "12 x 12 x 6 in"
+                /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(?:inches?|in\.?)/i,
+                // Pattern 2: "12" x 12" x 6"" (with quotes)
+                /(\d+\.?\d*)\s*["]\s*x\s*(\d+\.?\d*)\s*["]\s*x\s*(\d+\.?\d*)\s*["]/i,
+                // Pattern 3: "12 × 12 × 6 inches" (with × symbol)
+                /(\d+\.?\d*)\s*×\s*(\d+\.?\d*)\s*×\s*(\d+\.?\d*)\s*(?:inches?|in\.?)/i,
+                // Pattern 4: "12x12x6 inches" (no spaces)
+                /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(?:inches?|in\.?)/i,
+                // Pattern 5: "12 x 12 x 6" (no unit, assume inches)
+                /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)(?:\s|$)/i,
+              ]
+              
+              for (const dimPattern of dimensionPatterns) {
+                const dimensionMatch = dimensionText.match(dimPattern)
+                if (dimensionMatch && dimensionMatch[1] && dimensionMatch[2] && dimensionMatch[3]) {
+                  const w = parseFloat(dimensionMatch[1])
+                  const l = parseFloat(dimensionMatch[2])
+                  const h = parseFloat(dimensionMatch[3])
+                  
+                  // Validate reasonable box dimensions (in inches)
+                  if (w > 0 && w < 100 && l > 0 && l < 100 && h > 0 && h < 100) {
+                    // Format: W x L x H (width x length x height)
+                    productData.dimensions = `${w}x${l}x${h}`
+                    console.log('✅ Extracted box dimensions from Product Dimensions row:', productData.dimensions)
+                    break
+                  }
+                }
+              }
+              if (productData.dimensions) break
+            }
+          }
         }
-
-        // Extract dimensions (for boxes)
-        const dimensionMatch = html.match(/(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(?:inches|in)/i)
-        if (dimensionMatch) {
-          productData.dimensions = `${dimensionMatch[1]}x${dimensionMatch[2]}x${dimensionMatch[3]}`
+        
+        // Fallback: search entire HTML for dimension patterns if not found in table
+        if (!productData.dimensions) {
+          const dimensionPatterns = [
+            /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(?:inches?|in\.?)/i,
+            /(\d+\.?\d*)\s*×\s*(\d+\.?\d*)\s*×\s*(\d+\.?\d*)\s*(?:inches?|in\.?)/i,
+            /(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)(?:\s|$)/i,
+          ]
+          
+          for (const pattern of dimensionPatterns) {
+            const dimensionMatch = html.match(pattern)
+            if (dimensionMatch && dimensionMatch[1] && dimensionMatch[2] && dimensionMatch[3]) {
+              const w = parseFloat(dimensionMatch[1])
+              const l = parseFloat(dimensionMatch[2])
+              const h = parseFloat(dimensionMatch[3])
+              
+              // Validate reasonable box dimensions
+              if (w > 0 && w < 100 && l > 0 && l < 100 && h > 0 && h < 100) {
+                productData.dimensions = `${w}x${l}x${h}`
+                console.log('✅ Extracted box dimensions (fallback):', productData.dimensions)
+                break
+              }
+            }
+          }
+        }
+        
+        // Extract material/color information (for boxes)
+        if (productDetailsTableMatch) {
+          const tableHtml = productDetailsTableMatch[1]
+          
+          // Look for Material row
+          const materialRowPatterns = [
+            /<tr[^>]*>[\s\S]{0,500}Material[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /<tr[^>]*>[\s\S]{0,500}Material[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /Material[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+          ]
+          
+          for (const pattern of materialRowPatterns) {
+            const materialRowMatch = tableHtml.match(pattern)
+            if (materialRowMatch && materialRowMatch[1]) {
+              let material = materialRowMatch[1].trim()
+              material = material.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+              if (material && material.length > 0 && material.length < 200) {
+                if (!productData.description) {
+                  productData.description = `Material: ${material}`
+                } else {
+                  productData.description += `\nMaterial: ${material}`
+                }
+                console.log('✅ Extracted material:', material)
+                break
+              }
+            }
+          }
+          
+          // Look for Color row
+          const colorRowPatterns = [
+            /<tr[^>]*>[\s\S]{0,500}Color[:\s]*<\/th>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /<tr[^>]*>[\s\S]{0,500}Color[:\s]*<\/td>[\s\S]{0,500}?<td[^>]*>([\s\S]{0,500}?)<\/td>/i,
+            /Color[:\s]*<\/th>[\s\S]{0,1000}?<td[^>]*>([\s\S]{0,1000}?)<\/td>/i,
+          ]
+          
+          for (const pattern of colorRowPatterns) {
+            const colorRowMatch = tableHtml.match(pattern)
+            if (colorRowMatch && colorRowMatch[1]) {
+              let color = colorRowMatch[1].trim()
+              color = color.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+              if (color && color.length > 0 && color.length < 200) {
+                if (!productData.description) {
+                  productData.description = `Color: ${color}`
+                } else {
+                  productData.description += `\nColor: ${color}`
+                }
+                console.log('✅ Extracted color:', color)
+                break
+              }
+            }
+          }
         }
 
         // Extract roll dimensions from "included component" field
@@ -474,6 +739,20 @@ export default defineEventHandler(async (event) => {
           }
         }
         
+        // Log final roll dimensions before validation
+        console.log('📏 Roll dimensions extracted (before validation):', {
+          rollWidth: productData.rollWidth,
+          rollLength: productData.rollLength,
+          rollWidthType: typeof productData.rollWidth,
+          rollLengthType: typeof productData.rollLength
+        })
+        
+        // If we detected roll dimensions, it's likely wrapping paper
+        if ((productData.rollWidth && productData.rollLength) && !productData.type) {
+          productData.type = 'wrapping_paper'
+          console.log('✅ Auto-detected type: wrapping_paper (from roll dimensions)')
+        }
+        
         // Final validation: if we have values but they seem swapped, swap them
         if (productData.rollWidth && productData.rollLength) {
           console.log('🔍 Final validation - Current values:', {
@@ -524,7 +803,15 @@ export default defineEventHandler(async (event) => {
             console.log('✅ Corrected roll dimensions:', productData.rollWidth, 'inches x', productData.rollLength, 'feet')
           }
         }
-
+        
+        // Log final roll dimensions after all processing
+        console.log('📏 Final roll dimensions (after validation):', {
+          rollWidth: productData.rollWidth,
+          rollLength: productData.rollLength,
+          rollWidthInches: productData.rollWidth ? `${productData.rollWidth} inches` : 'not set',
+          rollLengthFeet: productData.rollLength ? `${productData.rollLength} feet` : 'not set'
+        })
+        
         // Extract product image/thumbnail - try multiple methods
         let imageUrl = null
         
@@ -724,6 +1011,27 @@ export default defineEventHandler(async (event) => {
       // Continue with basic ASIN extraction
     }
 
+    // Final type detection fallback: check title and description together
+    if (!productData.type && productData.title) {
+      const searchText = (productData.title + ' ' + (productData.description || '')).toLowerCase()
+      if (searchText.includes('tag') || searchText.includes('gift tag') || searchText.includes('sticker')) {
+        productData.type = 'tag'
+        console.log('✅ Auto-detected type: tag (fallback)')
+      } else if (searchText.includes('box') && !searchText.includes('gift box') && !searchText.includes('wrapping')) {
+        productData.type = 'box'
+        console.log('✅ Auto-detected type: box (fallback)')
+      } else if (searchText.includes('ribbon')) {
+        productData.type = 'ribbon'
+        console.log('✅ Auto-detected type: ribbon (fallback)')
+      } else if (searchText.includes('wrapping') || searchText.includes('wrap') || searchText.includes('paper')) {
+        productData.type = 'wrapping_paper'
+        console.log('✅ Auto-detected type: wrapping_paper (fallback)')
+      } else if (searchText.includes('bow')) {
+        productData.type = 'bow'
+        console.log('✅ Auto-detected type: bow (fallback)')
+      }
+    }
+    
     // Calculate cost per sqft if we have price and size
     if (productData.price && productData.size) {
       const sqftMatch = productData.size.match(/(\d+)/)
@@ -735,6 +1043,18 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Final log of all product data before returning
+    console.log('📦 Final productData being returned:', {
+      asin: productData.asin,
+      type: productData.type,
+      title: productData.title ? productData.title.substring(0, 50) + '...' : null,
+      rollWidth: productData.rollWidth,
+      rollLength: productData.rollLength,
+      size: productData.size,
+      quantity: productData.quantity,
+      price: productData.price
+    })
+    
     return {
       success: true,
       data: productData,

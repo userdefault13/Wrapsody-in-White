@@ -17,12 +17,19 @@ export const useGraphQL = () => {
       })
 
       if (response.errors) {
-        throw new Error(response.errors[0]?.message || 'GraphQL error')
+        const errorMessage = response.errors[0]?.message || 'GraphQL error'
+        const errorObj = new Error(errorMessage) as any
+        errorObj.data = response
+        errorObj.errors = response.errors
+        throw errorObj
       }
 
       return response.data
     } catch (error: any) {
       console.error('GraphQL query error:', error)
+      if (error.data) {
+        console.error('GraphQL response:', error.data)
+      }
       throw error
     }
   }

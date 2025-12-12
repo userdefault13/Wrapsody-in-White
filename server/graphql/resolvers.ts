@@ -2100,7 +2100,11 @@ export const resolvers = {
             rolls = args.input.rolls.map((roll: any) => ({
               rollNumber: roll.rollNumber,
               onHand: parseFloat(roll.onHand),
-              maxArea: parseFloat(roll.maxArea)
+              maxArea: parseFloat(roll.maxArea),
+              image: roll.image || null,
+              printName: roll.printName || null,
+              hasReverseSide: roll.hasReverseSide || false,
+              pairedRollNumber: roll.pairedRollNumber || null
             }))
             // Calculate remainingArea from rolls
             remainingArea = rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
@@ -2113,7 +2117,11 @@ export const resolvers = {
               rolls.push({
                 rollNumber: i + 1,
                 onHand: sizePerRoll,
-                maxArea: sizePerRoll
+                maxArea: sizePerRoll,
+                image: null,
+                printName: null,
+                hasReverseSide: false,
+                pairedRollNumber: null
               })
             }
             totalArea = sizePerRoll * quantity
@@ -2142,6 +2150,7 @@ export const resolvers = {
           remainingArea: remainingArea,
           minUsableArea: minUsableArea,
           rolls: rolls,
+          printNames: args.input.printNames && Array.isArray(args.input.printNames) ? args.input.printNames : [],
           supplier: args.input.supplier || null,
           thumbnail: args.input.thumbnail || null,
           amazonAsin: args.input.amazonAsin || null,
@@ -2188,6 +2197,7 @@ export const resolvers = {
         if (updateData.amazonAsin !== undefined) update.amazonAsin = updateData.amazonAsin
         if (updateData.amazonUrl !== undefined) update.amazonUrl = updateData.amazonUrl
         if (updateData.notes !== undefined) update.notes = updateData.notes
+        if (updateData.printNames !== undefined) update.printNames = Array.isArray(updateData.printNames) ? updateData.printNames : []
         if (updateData.rollLength !== undefined) {
           update.rollLength = updateData.rollLength != null ? parseFloat(updateData.rollLength) : null
         }
@@ -2211,11 +2221,20 @@ export const resolvers = {
         if (finalType === 'wrapping_paper') {
           // If rolls are provided, use them
           if (updateData.rolls !== undefined && Array.isArray(updateData.rolls) && updateData.rolls.length > 0) {
-            update.rolls = updateData.rolls.map((roll: any) => ({
-              rollNumber: roll.rollNumber,
-              onHand: parseFloat(roll.onHand),
-              maxArea: parseFloat(roll.maxArea)
-            }))
+            update.rolls = updateData.rolls.map((roll: any) => {
+              // Find existing roll to preserve image if not provided
+              const existingRoll = current.rolls?.find((r: any) => r.rollNumber === roll.rollNumber)
+              return {
+                rollNumber: roll.rollNumber,
+                onHand: parseFloat(roll.onHand),
+                maxArea: parseFloat(roll.maxArea),
+                // Preserve existing image if not explicitly provided in update
+                image: roll.image !== undefined ? roll.image : (existingRoll?.image || null),
+                printName: roll.printName !== undefined ? roll.printName : (existingRoll?.printName || null),
+                hasReverseSide: roll.hasReverseSide !== undefined ? roll.hasReverseSide : (existingRoll?.hasReverseSide || false),
+                pairedRollNumber: roll.pairedRollNumber !== undefined ? roll.pairedRollNumber : (existingRoll?.pairedRollNumber || null)
+              }
+            })
             // Calculate remainingArea from rolls
             update.remainingArea = update.rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
             // Calculate totalArea from rolls
@@ -2246,8 +2265,13 @@ export const resolvers = {
             if (!update.rolls && current.rolls && Array.isArray(current.rolls)) {
               // Keep existing rolls but update maxArea if size changed
               update.rolls = current.rolls.map((roll: any) => ({
-                ...roll,
-                maxArea: sizePerRoll
+                rollNumber: roll.rollNumber,
+                onHand: roll.onHand,
+                maxArea: sizePerRoll,
+                image: roll.image || null,
+                printName: roll.printName || null,
+                hasReverseSide: roll.hasReverseSide || false,
+                pairedRollNumber: roll.pairedRollNumber || null
               }))
               update.remainingArea = update.rolls.reduce((sum: number, roll: any) => sum + roll.onHand, 0)
             } else if (!update.rolls) {
@@ -2262,7 +2286,11 @@ export const resolvers = {
                 update.rolls.push({
                   rollNumber: i + 1,
                   onHand: onHandPerRoll,
-                  maxArea: sizePerRoll
+                  maxArea: sizePerRoll,
+                  image: null,
+                  printName: null,
+                  hasReverseSide: false,
+                  pairedRollNumber: null
                 })
               }
               update.remainingArea = remainingArea

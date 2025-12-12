@@ -263,12 +263,17 @@ export const typeDefs = `#graphql
     bow
     ribbon
     box
+    tag
   }
 
   type Roll {
     rollNumber: Int!
     onHand: Float!
     maxArea: Float!
+    image: String
+    printName: String
+    hasReverseSide: Boolean
+    pairedRollNumber: Int
   }
 
   type Inventory {
@@ -285,6 +290,7 @@ export const typeDefs = `#graphql
     remainingArea: Float
     minUsableArea: Float
     rolls: [Roll!]
+    printNames: [String!]
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -502,6 +508,10 @@ export const typeDefs = `#graphql
     rollNumber: Int!
     onHand: Float!
     maxArea: Float!
+    image: String
+    printName: String
+    hasReverseSide: Boolean
+    pairedRollNumber: Int
   }
 
   input CreateInventoryInput {
@@ -514,6 +524,7 @@ export const typeDefs = `#graphql
     rollLength: Float
     rollWidth: Float
     rolls: [RollInput!]
+    printNames: [String!]
     supplier: String
     thumbnail: String
     amazonAsin: String
@@ -532,6 +543,7 @@ export const typeDefs = `#graphql
     rollLength: Float
     rollWidth: Float
     rolls: [RollInput!]
+    printNames: [String!]
     supplier: String
     thumbnail: String
     amazonAsin: String

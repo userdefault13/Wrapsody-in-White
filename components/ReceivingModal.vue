@@ -103,7 +103,7 @@
                       <div><strong>Pack Information:</strong></div>
                       <div>• Each pack contains 4 rolls</div>
                       <div v-if="packsToReceive > 0">
-                        • Receiving <strong>{{ packsToReceive }}</strong> pack(s) = <strong>{{ packsToReceive * 4 }}</strong> rolls
+                        • Receiving <strong>{{ packsToReceive }}</strong> pack(s) = <strong>{{ packsToReceive * 4 }}</strong> rolls worth of area
                       </div>
                       <div v-if="packsToReceive > 0 && sqftPerRoll > 0">
                         • Each roll: <strong>{{ sqftPerRoll.toFixed(2) }} sqft</strong>
@@ -112,7 +112,7 @@
                         <strong>Total area to add: {{ (packsToReceive * 4 * sqftPerRoll).toFixed(2) }} sqft</strong>
                       </div>
                       <div v-if="packsToReceive > 0 && sqftPerRoll > 0" class="text-xs text-gray-600 dark:text-gray-400">
-                        This will be automatically distributed across rolls.
+                        This will be automatically distributed across existing rolls. Quantity will not change.
                       </div>
                     </div>
                   </div>
@@ -167,16 +167,27 @@
             <div class="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 @click="close"
-                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                :disabled="saving"
+                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 @click="saveReceiving"
                 :disabled="!canSave || saving"
-                class="px-6 py-2 bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-800 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                class="px-6 py-2 bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-800 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
-                {{ saving ? 'Saving...' : 'Receive Stock' }}
+                <svg
+                  v-if="saving"
+                  class="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ saving ? 'Processing...' : 'Receive Stock' }}
               </button>
             </div>
           </div>
@@ -295,59 +306,69 @@ const saveReceiving = async () => {
       // Calculate total area to add: packs * 4 rolls * sqft per roll
       const totalAreaToAdd = packsToReceive.value * 4 * sqftPerRoll.value
       
-      // Distribute area across rolls
-      // Strategy: fill each roll to maxArea first, then move to next roll
+      // Distribute area across existing rolls
+      // Strategy: fill each roll to maxArea first, then distribute remaining area using quantity field
       let remainingAreaToAdd = totalAreaToAdd
       const updatedRolls = selectedItem.value.rolls.map(roll => {
         const currentOnHand = roll.onHand || 0
         const maxArea = roll.maxArea || 0
+        const currentQuantity = roll.quantity || 1 // Default to 1 if not set
         const spaceAvailable = Math.max(0, maxArea - currentOnHand)
         
         let areaToAddToThisRoll = 0
+        let newQuantity = currentQuantity
+        
+        // First, fill up to maxArea
         if (remainingAreaToAdd > 0 && spaceAvailable > 0) {
           areaToAddToThisRoll = Math.min(remainingAreaToAdd, spaceAvailable)
           remainingAreaToAdd -= areaToAddToThisRoll
         }
         
+        // If there's still area remaining, add it using quantity (allowing onHand to exceed maxArea)
+        if (remainingAreaToAdd > 0) {
+          // Calculate how much more we can add to this roll
+          const additionalArea = Math.min(remainingAreaToAdd, maxArea)
+          areaToAddToThisRoll += additionalArea
+          remainingAreaToAdd -= additionalArea
+          
+          // Increase quantity to represent the additional stock
+          // If we're adding a full roll's worth, increase quantity by 1
+          if (additionalArea >= maxArea * 0.9) { // 90% threshold to account for rounding
+            newQuantity = currentQuantity + 1
+          } else {
+            // For partial rolls, calculate the fractional quantity increase
+            newQuantity = currentQuantity + (additionalArea / maxArea)
+          }
+        }
+        
         return {
           ...roll,
-          onHand: currentOnHand + areaToAddToThisRoll
+          onHand: currentOnHand + areaToAddToThisRoll,
+          quantity: newQuantity
         }
       })
       
-      // If there's still area remaining after filling all existing rolls,
-      // we need to add new rolls or increase quantity
+      // If there's still area remaining after distributing to all rolls,
+      // distribute it evenly across all rolls using quantity
       if (remainingAreaToAdd > 0) {
-        // Calculate how many new rolls we need
-        const newRollsNeeded = Math.ceil(remainingAreaToAdd / sqftPerRoll.value)
-        const currentRollCount = updatedRolls.length
-        const newQuantity = selectedItem.value.quantity + newRollsNeeded
+        const numRolls = updatedRolls.length
+        const areaPerRoll = remainingAreaToAdd / numRolls
         
-        // Add new rolls
-        for (let i = 0; i < newRollsNeeded; i++) {
-          const rollNumber = currentRollCount + i + 1
-          const areaForThisRoll = Math.min(remainingAreaToAdd, sqftPerRoll.value)
-          remainingAreaToAdd -= areaForThisRoll
-          
-          updatedRolls.push({
-            rollNumber: rollNumber,
-            onHand: areaForThisRoll,
-            maxArea: sqftPerRoll.value,
-            image: null,
-            printName: null,
-            hasReverseSide: false,
-            pairedRollNumber: null
-          })
-        }
-        
-        updateData.quantity = newQuantity
+        updatedRolls.forEach(roll => {
+          roll.onHand += areaPerRoll
+          // Increase quantity proportionally
+          const quantityIncrease = areaPerRoll / roll.maxArea
+          roll.quantity = (roll.quantity || 1) + quantityIncrease
+        })
       }
       
       updateData.rolls = updatedRolls
       
-      // Calculate new remainingArea from updated rolls
+      // Calculate new remainingArea from updated rolls (for display purposes)
       const newRemainingArea = updatedRolls.reduce((sum, roll) => sum + (roll.onHand || 0), 0)
       updateData.remainingArea = newRemainingArea
+      
+      // Don't update quantity - keep it the same
     } else {
       // Update quantity for non-roll items
       updateData.quantity = (selectedItem.value.quantity || 0) + quantityToReceive.value
